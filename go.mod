@@ -11,6 +11,7 @@ require (
 )
 
 require (
+	github.com/Microsoft/go-winio v0.4.16 // indirect
 	github.com/getlantern/context v0.0.0-20190109183933-c447772a6520 // indirect
 	github.com/getlantern/errors v0.0.0-20190325191628-abdb3e3e36f7 // indirect
 	github.com/getlantern/golog v0.0.0-20190830074920-4ef2e798c2d7 // indirect
@@ -18,6 +19,7 @@ require (
 	github.com/getlantern/hidden v0.0.0-20190325191715-f02dbb02be55 // indirect
 	github.com/getlantern/ops v0.0.0-20190325191751-d70cb0d6f85f // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
+	github.com/james-barrow/golang-ipc v0.0.0-20210227130457-95e7cc81f5e2 // indirect
 	github.com/leaanthony/go-ansi-parser v1.2.0 // indirect
 	github.com/matryer/xbar/pkg/metadata v0.0.0-20210918110050-1410be750e94 // indirect
 	github.com/mattn/go-isatty v0.0.12 // indirect
