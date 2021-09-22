@@ -30,13 +30,22 @@ const appleScriptDefaultTemplate = `
 			end if
 		`
 
-func initPluginRunner(ipcc *ipc.Client, p *plugins.Plugin, st *state) func() {
+type pluginRunner struct {
+	plugin *plugins.Plugin
+	st     *state
+	ipc    *ipc.Client
+}
+
+func (r *pluginRunner) init() func() {
 	return func() {
-		log.Infof("command %s", p.Command)
+		log.Infof("command %s", r.plugin.Command)
 		ctx := context.Background()
-		p.Refresh(ctx)
-		_ = ipcc.Write(14, []byte("hello server. I refreshed"))
-		title := p.Items.CycleItems[0].DisplayText()
+		r.plugin.Refresh(ctx)
+		err := r.ipc.Write(14, []byte("hello server. I refreshed"))
+		if err != nil {
+			log.Warnf("could not write to server %s", err)
+		}
+		title := r.plugin.Items.CycleItems[0].DisplayText()
 		systray.SetTitle(title)
 		// if windows, set title and icon ...
 		if runtime.GOOS == "windows" {
@@ -45,10 +54,10 @@ func initPluginRunner(ipcc *ipc.Client, p *plugins.Plugin, st *state) func() {
 		} else {
 			systray.SetTooltip("Crossbar")
 		}
-		p.Debugf = log.Infof
+		r.plugin.Debugf = log.Infof
 		//p.AppleScriptTemplate = appleScriptDefaultTemplate
-		log.Infof("found %d items", len(p.Items.ExpandedItems))
-		for _, item := range p.Items.ExpandedItems {
+		log.Infof("found %d items", len(r.plugin.Items.ExpandedItems))
+		for _, item := range r.plugin.Items.ExpandedItems {
 			if item.Params.Separator {
 				systray.AddSeparator()
 			} else {
@@ -60,16 +69,15 @@ func initPluginRunner(ipcc *ipc.Client, p *plugins.Plugin, st *state) func() {
 						if len(subitem.Items) > 0 {
 							for _, subsubitem := range subitem.Items {
 								mSubSubItem := mSubItem.AddSubMenuItem(subsubitem.DisplayText(), "tooltip")
-								handleAction(st, subsubitem, mSubSubItem.ClickedCh)
+								r.handleAction(subsubitem, mSubSubItem.ClickedCh)
 							}
 						} else {
-							handleAction(st, subitem, mSubItem.ClickedCh)
+							r.handleAction(subitem, mSubItem.ClickedCh)
 						}
 					}
 				} else {
-					handleAction(st, item, mItem.ClickedCh)
+					r.handleAction(item, mItem.ClickedCh)
 				}
-				//}
 			}
 		}
 
@@ -85,19 +93,21 @@ func initPluginRunner(ipcc *ipc.Client, p *plugins.Plugin, st *state) func() {
 
 	}
 }
-
-func handleAction(st *state, item *plugins.Item, clickedChan <-chan struct{}) {
+func (r *pluginRunner) handleAction(item *plugins.Item, clickedChan <-chan struct{}) {
 
 	action := item.Action()
 	go func() {
 		for _ = range clickedChan {
 			// only run one action at once. avoids stuck actions from accumulating
 			log.Infof("Clicked item %+v", item)
-			st.lock.Lock()
+			r.st.lock.Lock()
 			ctx := context.Background()
 			action(ctx)
 			log.Infof("click action complete")
-			st.lock.Unlock()
+			r.st.lock.Unlock()
 		}
 	}()
+}
+
+func (r *pluginRunner) onExit() {
 }

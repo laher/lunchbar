@@ -85,6 +85,10 @@ func (s *supervisor) StartAll() {
 				log.Errorf("error running %s: %s,%s", commandExec, err)
 				return
 			}
+			err = s.ipc.Write(14, []byte("hello client. I refreshed"))
+			if err != nil {
+				log.Warnf("could not write to client %s", err)
+			}
 		}(plugin)
 	}
 }

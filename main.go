@@ -51,8 +51,9 @@ func main() {
 			bin = filepath.Join(pluginsDir, plugin)
 		}
 		p := plugins.NewPlugin(bin)
+		r := pluginRunner{plugin: p, st: st, ipc: sc}
 		log.Infof("launching systray icon")
-		systray.Run(initPluginRunner(sc, p, st), onExit)
+		systray.Run(r.init(), r.onExit)
 	} else {
 		sc, err := ipc.StartServer("crossbar", nil)
 		if err != nil {
@@ -75,6 +76,4 @@ func appMenu(mItem *systray.MenuItem) {
 	mItem.AddSubMenuItem("Refresh", "")
 	mItem.AddSubMenuItem("Open plugins dir", "")
 
-}
-func onExit() {
 }
