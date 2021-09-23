@@ -39,7 +39,7 @@ What are the similarities and differences between xbar and crossbar?
  * Some mechanism to discover and install plugins. Possibly similar to the xbar wasy. Not sure.
 
 
-# Installation
+## Installation
 
 For now, it's not pre-packaged. Please install crossbar using the Go compiler.
 
@@ -56,4 +56,53 @@ For now, it's not pre-packaged. Please install crossbar using the Go compiler.
 
     crossbar myplugin.sh
 
+## Progress
 
+### M1
+
+Focus of M1 is to get something usable working across OSes ...
+
+ - [x] parse and handle plugin output
+   - [x] href, shell, terminal[mac]
+ - [x] 2 modes - supervisor and runner
+   - [ ] IPC
+ - [x] Quit
+ - [ ] Refreshing
+   - [ ] Refresh button
+   - [ ] Refresh on timer
+   - [ ] Refresh all (IPC)
+ - [ ] Cross platform work
+   - [x] Mac support
+   - [ ] Support icon instead of text. Basic.
+   - [ ] Verify
+      - [ ] Test on Linux
+      - [ ] Test on Windows
+ - [ ] Error handling
+   - [ ] Show a sample when no plugins found
+   - [ ] React to killed process
+ - [ ] Testing 
+   - [ ] Happy Path Tests
+   - [ ] Error path tests
+ - [ ] Build automation?!
+
+### M2
+
+M2 is to add some convenience features ahead of plugin management
+
+ - [ ] .env files
+     - [ ] encrypted keys
+ - [ ] Plugin-writing help 
+   - [ ] Bundled-elvish support
+   - [ ] Cross-platform convenience methods
+   - [ ] Guides
+
+### M3
+
+M3 is all about plugin repo and managing compatibility with xbar plugins
+
+ - [ ] Sample 'services'
+ - [ ] Samples of some cross-platform [elvish] scripts
+     - [ ] docker-compose
+     - [ ] kube
+     - [ ] weather
+     - [ ] finance
