@@ -4,6 +4,8 @@ import (
 	"context"
 	"runtime"
 
+	_ "embed"
+
 	"github.com/apex/log"
 	"github.com/getlantern/systray"
 	ipc "github.com/james-barrow/golang-ipc"
@@ -43,17 +45,23 @@ func (r *pluginRunner) init() func() {
 		r.plugin.Refresh(ctx)
 		err := r.ipc.Write(14, []byte("hello server. I refreshed"))
 		if err != nil {
-			log.Warnf("could not write to server %s", err)
+			log.Warnf("could not write to server: %s", err)
 		}
 		title := r.plugin.Items.CycleItems[0].DisplayText()
-		systray.SetTitle(title)
-		// if windows, set title and icon ...
-		if runtime.GOOS == "windows" {
-			// TODO - always set an icon
-			systray.SetTooltip(title)
-		} else {
-			systray.SetTooltip("Crossbar")
+		systray.SetTitle(title)   // doesn't do anything on windows.
+		systray.SetTooltip(title) // not all platforms
+		// necessary for windows - set title and icon ...
+		ic, err := getTextIcon(title[0:1])
+		//ic, err := getTextIcon("C")
+		if err == nil {
+			systray.SetIcon(ic)
 		}
+
+		if runtime.GOOS == "windows" {
+			systray.AddMenuItem(title, "tooltip")
+			systray.AddSeparator()
+		}
+
 		r.plugin.Debugf = log.Infof
 		//p.AppleScriptTemplate = appleScriptDefaultTemplate
 		log.Infof("found %d items", len(r.plugin.Items.ExpandedItems))

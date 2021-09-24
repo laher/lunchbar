@@ -3,10 +3,14 @@ module github.com/laher/crossbar
 go 1.17
 
 require (
+	github.com/Kodeworks/golang-image-ico v0.0.0-20141118225523-73f0f4cfade9
 	github.com/apex/log v1.9.0
 	github.com/getlantern/systray v1.1.0
+	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
+	github.com/james-barrow/golang-ipc v0.0.0-20210227130457-95e7cc81f5e2
 	github.com/matryer/xbar/pkg/plugins v0.0.0-20210918110050-1410be750e94
 	github.com/pkg/errors v0.9.1
+	golang.org/x/image v0.0.0-20210628002857-a66eb6448b8d
 	src.elv.sh v0.16.3
 )
 
@@ -19,7 +23,6 @@ require (
 	github.com/getlantern/hidden v0.0.0-20190325191715-f02dbb02be55 // indirect
 	github.com/getlantern/ops v0.0.0-20190325191751-d70cb0d6f85f // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
-	github.com/james-barrow/golang-ipc v0.0.0-20210227130457-95e7cc81f5e2 // indirect
 	github.com/leaanthony/go-ansi-parser v1.2.0 // indirect
 	github.com/matryer/xbar/pkg/metadata v0.0.0-20210918110050-1410be750e94 // indirect
 	github.com/mattn/go-isatty v0.0.12 // indirect
@@ -28,4 +31,8 @@ require (
 	golang.org/x/sys v0.0.0-20210820121016-41cdb8703e55 // indirect
 )
 
-exclude github.com/matryer/xbar/pkg/metadata v0.0.0-00010101000000-000000000000
+//exclude github.com/matryer/xbar/pkg/metadata v0.0.0-00010101000000-000000000000
+
+replace github.com/matryer/xbar/pkg/metadata => ../xbar/pkg/metadata
+
+replace github.com/matryer/xbar/pkg/plugins => ../xbar/pkg/plugins
