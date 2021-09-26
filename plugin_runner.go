@@ -17,13 +17,14 @@ import (
 )
 
 type pluginRunner struct {
-	plugin   *plugins.Plugin
-	lock     sync.Mutex
-	ipc      *ipc.Client
-	mainItem *systray.MenuItem
-	items    []*itemWrap
-	subitems map[*itemWrap][]*itemWrap
-	log      *log.Entry
+	plugin      *plugins.Plugin
+	lock        sync.Mutex
+	ipc         *ipc.Client
+	mainItem    *systray.MenuItem
+	items       []*itemWrap
+	subitems    map[*itemWrap][]*itemWrap
+	subsubitems map[*itemWrap][]*itemWrap
+	log         *log.Entry
 }
 
 type itemWrap struct {
@@ -36,11 +37,12 @@ type itemWrap struct {
 func newPluginRunner(bin string, ipc *ipc.Client) *pluginRunner {
 	p := plugins.NewPlugin(bin)
 	r := &pluginRunner{
-		plugin:   p,
-		ipc:      ipc,
-		items:    []*itemWrap{},
-		subitems: map[*itemWrap][]*itemWrap{},
-		log:      log.WithField("plugin", filepath.Base(bin)).WithField("pid", os.Getpid()),
+		plugin:      p,
+		ipc:         ipc,
+		items:       []*itemWrap{},
+		subitems:    map[*itemWrap][]*itemWrap{},
+		subsubitems: map[*itemWrap][]*itemWrap{},
+		log:         log.WithField("plugin", filepath.Base(bin)).WithField("pid", os.Getpid()),
 	}
 	return r
 }
@@ -56,6 +58,7 @@ func (p *pluginRunner) Listen() {
 		p.log.WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Infof("plugin runner received message")
 	}
 }
+
 func (r *pluginRunner) init() func() {
 	r.log.Infof("launching systray icon")
 	return func() {
@@ -75,26 +78,58 @@ func (r *pluginRunner) init() func() {
 			r.log.Info("Finished refresh request")
 
 		}()
-		mOpen := r.mainItem.AddSubMenuItem("Open plugin script", "open script")
+		mOpen := r.mainItem.AddSubMenuItem("Edit plugin script", "edit script")
 		go func() {
 			<-mOpen.ClickedCh
 			r.log.Info("Requesting open file")
 			r.lock.Lock()
 			defer r.lock.Unlock()
-			//ctx := context.Background()
-			// todo
-			r.log.Info("Finished refresh request")
+			ctx := context.Background()
+
+			// for now ... use EDITOR?
+			editor := os.Getenv("EDITOR")
+			if editor == "" {
+				log.Warn("EDITOR not set")
+				return
+			}
+			log.Infof("running %s", editor)
+			item := &plugins.Item{
+				Params: plugins.ItemParams{
+					Shell:       editor,
+					ShellParams: []string{r.plugin.Command},
+					Terminal:    true,
+				},
+				Plugin: r.plugin,
+			}
+			af := item.Action()
+			af(ctx)
+			/*
+				cmd := exec.CommandContext(ctx, editor)
+				cmd.Dir = filepath.Dir(r.plugin.Command)
+				cmd.Env = append(cmd.Env, os.Environ()...)
+				if err := cmd.Start(); err != nil {
+					log.Warnf("error opening file", err)
+				}
+			*/
+			r.log.Info("Finished file open request")
 
 		}()
 		mOpenDir := r.mainItem.AddSubMenuItem("Open plugin scripts dir", "open scripts dir")
 		go func() {
 			<-mOpenDir.ClickedCh
-			r.log.Info("Requesting open file")
+			r.log.Info("Requesting open dir")
 			r.lock.Lock()
 			defer r.lock.Unlock()
-			//ctx := context.Background()
-			// todo
-			r.log.Info("Finished refresh request")
+			item := &plugins.Item{
+				Params: plugins.ItemParams{
+					// href handler uses 'open' etc.
+					Href: filepath.Dir(r.plugin.Command),
+				},
+				Plugin: r.plugin,
+			}
+			af := item.Action()
+			af(ctx)
+			r.log.Info("Finished open dir request")
 
 		}()
 		mQuit := r.mainItem.AddSubMenuItem("Quit", "Quit crossbar")
@@ -150,7 +185,7 @@ func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 	}
 
 	r.plugin.Debugf = r.log.Infof
-	//p.AppleScriptTemplate = appleScriptDefaultTemplate
+	r.plugin.AppleScriptTemplate = appleScriptDefaultTemplate
 	r.log.Infof("found %d items", len(r.plugin.Items.ExpandedItems))
 	for index, item := range r.plugin.Items.ExpandedItems {
 		var itemW *itemWrap
@@ -195,7 +230,7 @@ func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 						subitemW.trayItem.Show()
 					}
 					if len(subitem.Items) > 0 {
-						subsubitemWs := r.subitems[subitemW]
+						subsubitemWs := r.subsubitems[subitemW]
 						if subsubitemWs == nil {
 							subsubitemWs = []*itemWrap{}
 						}
@@ -212,7 +247,7 @@ func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 							}
 							r.handleAction(subsubitemW)
 						}
-						r.subitems[subitemW] = subsubitemWs
+						r.subsubitems[subitemW] = subsubitemWs
 					} else {
 						r.handleAction(subitemW)
 					}
