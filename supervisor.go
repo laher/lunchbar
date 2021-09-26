@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,38 +22,38 @@ var (
 type supervisor struct {
 	lock   sync.Mutex
 	config *config
-	ipc    *ipc.Server
+	ipcs   map[string]*ipc.Server
 	log    *log.Entry
 }
 
-func newSupervisor(ipc *ipc.Server) (*supervisor, error) {
+func newSupervisor() (*supervisor, error) {
 	config, err := loadConfig(configFile)
 	if err != nil {
 		return nil, errors.Wrap(err, "loadConfig")
 	}
 	s := &supervisor{
 		config: config,
-		ipc:    ipc,
+		ipcs:   map[string]*ipc.Server{},
 		log:    log.WithField("t", "supervisor").WithField("pid", os.Getpid()),
 	}
 	return s, nil
 }
 
-func (s *supervisor) Listen() {
+func (s *supervisor) Listen(key string, ipcs *ipc.Server) {
 	for {
-		s.log.Infof("listen for messages ")
-		m, err := s.ipc.Read()
+		s.log.WithField("plugin", key).Infof("listen for messages")
+		m, err := ipcs.Read()
 		if err != nil {
 			s.log.Errorf("IPC server error %s", err)
 			break
 		}
-		s.log.WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Infof("Server received message")
-		s.sendIPC("OK", "originator")
+		s.log.WithField("plugin", key).WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Infof("Server received message")
+		s.sendIPC("OK", key)
 	}
 }
 
-func (s *supervisor) sendIPC(m string, t string) {
-	err := s.ipc.Write(14, []byte(fmt.Sprintf("from:supervisor, to:%s: %s", m, m)))
+func (s *supervisor) sendIPC(m string, key string) {
+	err := s.ipcs[key].Write(14, []byte(m))
 	if err != nil {
 		s.log.Warnf("could not write to client: %s", err)
 	}
@@ -66,7 +65,7 @@ func (s *supervisor) Start() {
 		s.log.Warnf("failed to create plugin directory: %s", err)
 	}
 	s.StartAll()
-	time.Sleep(time.Hour * 24) // TODO refresh plugins list
+	time.Sleep(time.Hour * 24) // TODO refresh plugins list indefinitely instead
 }
 
 func (s *supervisor) StartAll() {
@@ -84,9 +83,16 @@ func (s *supervisor) StartAll() {
 		return
 	}
 
-	for _, plu := range pls {
-		plugin := plu
-		s.log.Infof("starting %s %s", commandExec, filepath.Base(plugin.Command))
+	for _, plugin := range pls {
+		key := filepath.Base(plugin.Command)
+		s.log.Infof("starting %s %s", commandExec, key)
+		sc, err := ipc.StartServer("crossbar_"+key, nil)
+		if err != nil {
+			log.Errorf("could not start IPC server: %s", err)
+			return
+		}
+		s.ipcs[key] = sc
+		go s.Listen(key, sc)
 		go func(plugin *plugins.Plugin) {
 			cmd := exec.CommandContext(ctx, commandExec, plugin.Command)
 			cmd.Dir = pluginsDir()
@@ -96,7 +102,7 @@ func (s *supervisor) StartAll() {
 				s.log.Errorf("error running %s: %s,%s", commandExec, err)
 				return
 			}
-			err = s.ipc.Write(14, []byte("hello client. I refreshed"))
+			err = sc.Write(14, []byte("hello client. I refreshed"))
 			if err != nil {
 				s.log.Warnf("could not write to client %s", err)
 			}

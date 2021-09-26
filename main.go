@@ -39,7 +39,8 @@ func main() {
 	}
 	pluginsDir := pluginsDir()
 	if plugin != "" {
-		sc, err := ipc.StartClient("crossbar", nil)
+		key := "crossbar_" + filepath.Base(plugin)
+		sc, err := ipc.StartClient(key, nil)
 		if err != nil {
 			log.Errorf("could not start IPC client: %s", err)
 			return
@@ -52,21 +53,12 @@ func main() {
 		go r.Listen()
 		systray.Run(r.init(), r.onExit)
 	} else {
-		sc, err := ipc.StartServer("crossbar", nil)
-		if err != nil {
-			log.Errorf("could not start IPC server: %s", err)
-			return
-		}
-		s, err := newSupervisor(sc)
+		s, err := newSupervisor()
 		if err != nil {
 			log.Errorf("could not set up supervisor: %s", err)
 			return
 		}
-		go s.Listen()
 		s.Start()
-
-		// TODO refresh occasionally?
-		return
 	}
 }
 

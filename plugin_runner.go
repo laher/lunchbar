@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -78,42 +77,35 @@ func (r *pluginRunner) init() func() {
 			r.log.Info("Finished refresh request")
 
 		}()
-		mOpen := r.mainItem.AddSubMenuItem("Edit plugin script", "edit script")
-		go func() {
-			<-mOpen.ClickedCh
-			r.log.Info("Requesting open file")
-			r.lock.Lock()
-			defer r.lock.Unlock()
-			ctx := context.Background()
+		// TODO - what to do if EDITOR not set. VISUAL? Look for a default program? TextEdit/notepad/etc?
+		editor := os.Getenv("EDITOR")
+		if editor == "" {
+			log.Warn("EDITOR not set")
+		} else {
+			mOpen := r.mainItem.AddSubMenuItem("Edit plugin script", "edit script")
+			go func() {
+				<-mOpen.ClickedCh
+				r.log.Info("Requesting open file")
+				r.lock.Lock()
+				defer r.lock.Unlock()
+				ctx := context.Background()
 
-			// for now ... use EDITOR?
-			editor := os.Getenv("EDITOR")
-			if editor == "" {
-				log.Warn("EDITOR not set")
-				return
-			}
-			log.Infof("running %s", editor)
-			item := &plugins.Item{
-				Params: plugins.ItemParams{
-					Shell:       editor,
-					ShellParams: []string{r.plugin.Command},
-					Terminal:    true,
-				},
-				Plugin: r.plugin,
-			}
-			af := item.Action()
-			af(ctx)
-			/*
-				cmd := exec.CommandContext(ctx, editor)
-				cmd.Dir = filepath.Dir(r.plugin.Command)
-				cmd.Env = append(cmd.Env, os.Environ()...)
-				if err := cmd.Start(); err != nil {
-					log.Warnf("error opening file", err)
+				// for now ... use EDITOR?
+				log.Infof("running %s", editor)
+				item := &plugins.Item{
+					Params: plugins.ItemParams{
+						Shell:       editor,
+						ShellParams: []string{r.plugin.Command},
+						Terminal:    true,
+					},
+					Plugin: r.plugin,
 				}
-			*/
-			r.log.Info("Finished file open request")
+				af := item.Action()
+				af(ctx)
+				r.log.Info("Finished file open request")
 
-		}()
+			}()
+		}
 		mOpenDir := r.mainItem.AddSubMenuItem("Open plugin scripts dir", "open scripts dir")
 		go func() {
 			<-mOpenDir.ClickedCh
@@ -165,7 +157,7 @@ func (r *pluginRunner) loop() {
 }
 
 func (r *pluginRunner) sendIPC(s string) {
-	err := r.ipc.Write(14, []byte(fmt.Sprintf("from:%s, to:supervisor. %s", filepath.Base(r.plugin.Command), s)))
+	err := r.ipc.Write(14, []byte(s))
 	if err != nil {
 		r.log.Warnf("could not write to server: %s", err)
 	}
