@@ -10,14 +10,13 @@ import (
 	"github.com/apex/log"
 	"github.com/getlantern/systray"
 	ipc "github.com/james-barrow/golang-ipc"
-	"github.com/matryer/xbar/pkg/plugins"
 )
 
+// TODO - OS-dependent dir? (xbar uses ~/Library/Application\ Support )
 func rootDir() string {
 	return filepath.Join(os.Getenv("HOME"), ".config", "crossbar")
 }
 
-// TODO - OS-dependent dir?
 func pluginsDir() string {
 	return filepath.Join(rootDir(), "plugins")
 }
@@ -39,7 +38,6 @@ func main() {
 		plugin = os.Args[1]
 	}
 	pluginsDir := pluginsDir()
-	st := &state{}
 	if plugin != "" {
 		sc, err := ipc.StartClient("crossbar", nil)
 		if err != nil {
@@ -50,9 +48,8 @@ func main() {
 		if !strings.Contains(plugin, "/") {
 			bin = filepath.Join(pluginsDir, plugin)
 		}
-		p := plugins.NewPlugin(bin)
-		r := pluginRunner{plugin: p, st: st, ipc: sc}
-		log.Infof("launching systray icon")
+		r := newPluginRunner(bin, sc)
+		go r.Listen()
 		systray.Run(r.init(), r.onExit)
 	} else {
 		sc, err := ipc.StartServer("crossbar", nil)
@@ -60,13 +57,14 @@ func main() {
 			log.Errorf("could not start IPC server: %s", err)
 			return
 		}
-		log.Infof("Loading plugins from %s", pluginsDir)
 		s, err := newSupervisor(sc)
 		if err != nil {
 			log.Errorf("could not set up supervisor: %s", err)
 			return
 		}
+		go s.Listen()
 		s.Start()
+
 		// TODO refresh occasionally?
 		return
 	}

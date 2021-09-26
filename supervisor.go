@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/apex/log"
 	ipc "github.com/james-barrow/golang-ipc"
@@ -22,6 +24,7 @@ type supervisor struct {
 	lock   sync.Mutex
 	config *config
 	ipc    *ipc.Server
+	log    *log.Entry
 }
 
 func newSupervisor(ipc *ipc.Server) (*supervisor, error) {
@@ -32,30 +35,38 @@ func newSupervisor(ipc *ipc.Server) (*supervisor, error) {
 	s := &supervisor{
 		config: config,
 		ipc:    ipc,
+		log:    log.WithField("t", "supervisor").WithField("pid", os.Getpid()),
 	}
 	return s, nil
 }
 
 func (s *supervisor) Listen() {
 	for {
-		log.Infof("listen for messages ")
+		s.log.Infof("listen for messages ")
 		m, err := s.ipc.Read()
 		if err != nil {
-			log.Errorf("IPC server error %s", err)
+			s.log.Errorf("IPC server error %s", err)
 			break
 		}
-		if m.MsgType > 0 {
-			log.Infof("Server recieved %s - Message type: %s", string(m.Data), m.MsgType)
-		}
+		s.log.WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Infof("Server received message")
+		s.sendIPC("OK", "originator")
+	}
+}
+
+func (s *supervisor) sendIPC(m string, t string) {
+	err := s.ipc.Write(14, []byte(fmt.Sprintf("from:supervisor, to:%s: %s", m, m)))
+	if err != nil {
+		s.log.Warnf("could not write to client: %s", err)
 	}
 }
 
 func (s *supervisor) Start() {
+	s.log.Infof("Loading plugins from %s", pluginsDir())
 	if err := os.MkdirAll(pluginsDir(), 0777); err != nil {
-		log.Warnf("failed to create plugin directory: %s", err)
+		s.log.Warnf("failed to create plugin directory: %s", err)
 	}
 	s.StartAll()
-	s.Listen()
+	time.Sleep(time.Hour * 24) // TODO refresh plugins list
 }
 
 func (s *supervisor) StartAll() {
@@ -64,30 +75,30 @@ func (s *supervisor) StartAll() {
 
 	pls, err := plugins.Dir(pluginsDir())
 	if err != nil {
-		log.Warnf("Error loading plugins", err)
+		s.log.Warnf("Error loading plugins", err)
 	}
 	ctx := context.Background()
 	commandExec, err := os.Executable()
 	if err != nil {
-		log.Warnf("Error getting current exe")
+		s.log.Warnf("Error getting current exe")
 		return
 	}
 
 	for _, plu := range pls {
 		plugin := plu
-		log.Infof("starting %s %s", commandExec, filepath.Base(plugin.Command))
+		s.log.Infof("starting %s %s", commandExec, filepath.Base(plugin.Command))
 		go func(plugin *plugins.Plugin) {
 			cmd := exec.CommandContext(ctx, commandExec, plugin.Command)
 			cmd.Dir = pluginsDir()
 			cmd.Stderr = os.Stdout
 			err := cmd.Run()
 			if err != nil {
-				log.Errorf("error running %s: %s,%s", commandExec, err)
+				s.log.Errorf("error running %s: %s,%s", commandExec, err)
 				return
 			}
 			err = s.ipc.Write(14, []byte("hello client. I refreshed"))
 			if err != nil {
-				log.Warnf("could not write to client %s", err)
+				s.log.Warnf("could not write to client %s", err)
 			}
 		}(plugin)
 	}
