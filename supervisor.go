@@ -69,16 +69,16 @@ func (s *supervisor) StartAll() {
 	if err != nil {
 		s.log.Warnf("Error loading plugins: %s", err)
 	}
-	ctx := context.Background()
-	commandExec, err := os.Executable()
+	thisExecutable, err := os.Executable()
 	if err != nil {
 		s.log.Warnf("Error getting current exe")
 		return
 	}
 
 	for _, plugin := range pls {
+		ctx := context.Background()
 		key := filepath.Base(plugin.Command)
-		s.log.Infof("starting %s %s", commandExec, key)
+		s.log.Infof("starting %s %s", thisExecutable, key)
 		sc, err := ipc.StartServer("crossbar_"+key, nil)
 		if err != nil {
 			log.Errorf("could not start IPC server: %s", err)
@@ -87,12 +87,12 @@ func (s *supervisor) StartAll() {
 		s.ipcs[key] = sc
 		go s.Listen(key, sc)
 		go func(plugin *plugins.Plugin) {
-			cmd := exec.CommandContext(ctx, commandExec, key)
+			cmd := exec.CommandContext(ctx, thisExecutable, "-plugin", key)
 			cmd.Dir = pluginsDir()
 			cmd.Stderr = os.Stdout
 			err := cmd.Run()
 			if err != nil {
-				s.log.WithField("plugin", filepath.Base(plugin.Command)).Errorf("error running %s: %s", commandExec, err)
+				s.log.WithField("plugin", filepath.Base(plugin.Command)).Errorf("error running %s: %s", thisExecutable, err)
 				return
 			}
 			err = sc.Write(msgcodeDefault, []byte("hello client. I refreshed"))

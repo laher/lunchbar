@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +26,26 @@ type pluginRunner struct {
 	subitems    map[*itemWrap][]*itemWrap
 	subsubitems map[*itemWrap][]*itemWrap
 	log         *log.Entry
+}
+
+func (r *pluginRunner) refreshItems(ctx context.Context) {
+	if strings.HasSuffix(r.plugin.Command, ".elvish") || strings.HasSuffix(r.plugin.Command, ".elv") {
+		// run it and parse output
+		out, err := elvish(r.plugin.Command, os.Stdout, os.Stderr, []string{r.plugin.Command})
+		if err != nil {
+			r.plugin.OnErr(err)
+			return
+		}
+		items, err := r.plugin.ParseOutput(ctx, r.plugin.Command, strings.NewReader(strings.Join(out, "\n")))
+		if err != nil {
+			r.plugin.OnErr(err)
+			return
+		}
+		r.plugin.Items = items
+	} else {
+		r.plugin.Refresh(ctx)
+	}
+	r.sendIPC("I refreshed")
 }
 
 func newPluginRunner(bin string, ipcc *ipc.Client) *pluginRunner {
@@ -90,8 +111,7 @@ func (r *pluginRunner) sendIPC(s string) {
 const osWindows = "windows"
 
 func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
-	r.plugin.Refresh(ctx)
-	r.sendIPC("I refreshed")
+	r.refreshItems(ctx)
 	title := r.plugin.Items.CycleItems[0].DisplayText()
 	systray.SetTitle(title)   // doesn't do anything on windows.
 	systray.SetTooltip(title) // not all platforms

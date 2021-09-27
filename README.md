@@ -88,7 +88,7 @@ Focus of M1 is to get something usable working across OSes ...
 
 M2 is to add some convenience features ahead of plugin management
 
- - [ ] Build automation?!
+ - [ ] Build automation (go-releaser cross compilation?)!
  - [ ] .env files
      - [ ] encrypted keys
  - [ ] Plugin-writing help 
