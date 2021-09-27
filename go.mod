@@ -31,8 +31,12 @@ require (
 	golang.org/x/sys v0.0.0-20210820121016-41cdb8703e55 // indirect
 )
 
-//exclude github.com/matryer/xbar/pkg/metadata v0.0.0-00010101000000-000000000000
+exclude github.com/matryer/xbar/pkg/metadata v0.0.0-00010101000000-000000000000
 
-replace github.com/matryer/xbar/pkg/metadata => ../xbar/pkg/metadata
+//replace github.com/matryer/xbar/pkg/metadata => github.com/laher/xbar/pkg/metadata
 
-replace github.com/matryer/xbar/pkg/plugins => ../xbar/pkg/plugins
+//replace github.com/matryer/xbar/pkg/plugins => ../xbar/pkg/plugins
+
+replace github.com/matryer/xbar/pkg/plugins => github.com/laher/xbar/pkg/plugins v0.0.0-20210924114740-39e1f09dc17d
+
+replace github.com/matryer/xbar/pkg/metadata => github.com/laher/xbar/pkg/metadata v0.0.0-20210924114740-39e1f09dc17d

@@ -74,7 +74,7 @@ func (s *supervisor) StartAll() {
 
 	pls, err := plugins.Dir(pluginsDir())
 	if err != nil {
-		s.log.Warnf("Error loading plugins", err)
+		s.log.Warnf("Error loading plugins: %s", err)
 	}
 	ctx := context.Background()
 	commandExec, err := os.Executable()
@@ -94,12 +94,12 @@ func (s *supervisor) StartAll() {
 		s.ipcs[key] = sc
 		go s.Listen(key, sc)
 		go func(plugin *plugins.Plugin) {
-			cmd := exec.CommandContext(ctx, commandExec, plugin.Command)
+			cmd := exec.CommandContext(ctx, commandExec, key)
 			cmd.Dir = pluginsDir()
 			cmd.Stderr = os.Stdout
 			err := cmd.Run()
 			if err != nil {
-				s.log.Errorf("error running %s: %s,%s", commandExec, err)
+				s.log.Errorf("error running %s: %s", commandExec, err)
 				return
 			}
 			err = sc.Write(14, []byte("hello client. I refreshed"))

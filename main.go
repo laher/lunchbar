@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -14,7 +15,14 @@ import (
 
 // TODO - OS-dependent dir? (xbar uses ~/Library/Application\ Support )
 func rootDir() string {
-	return filepath.Join(os.Getenv("HOME"), ".config", "crossbar")
+	var homeDir string
+	if runtime.GOOS == "windows" {
+		homeDir = os.Getenv("USERPROFILE")
+	} else {
+		homeDir = os.Getenv("HOME")
+	}
+
+	return filepath.Join(homeDir, ".config", "crossbar")
 }
 
 func pluginsDir() string {
