@@ -51,7 +51,6 @@ func (r *pluginRunner) addCrossbarMenu(title string) {
 			af := item.Action()
 			af(ctx)
 			r.log.Info("Finished file open request")
-
 		}()
 	}
 

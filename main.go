@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 
 	"github.com/apex/log"
 	"github.com/getlantern/systray"
@@ -16,7 +15,7 @@ import (
 // TODO - OS-dependent dir? (xbar uses ~/Library/Application\ Support )
 func rootDir() string {
 	var homeDir string
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		homeDir = os.Getenv("USERPROFILE")
 	} else {
 		homeDir = os.Getenv("HOME")
@@ -31,11 +30,6 @@ func pluginsDir() string {
 
 func isExecutable(fi os.FileMode) bool {
 	return fi.Perm()&0111 != 0
-}
-
-type state struct {
-	config config
-	lock   sync.Mutex
 }
 
 func main() {
@@ -68,9 +62,4 @@ func main() {
 		}
 		s.Start()
 	}
-}
-
-func appMenu(mItem *systray.MenuItem) {
-	mItem.AddSubMenuItem("Refresh", "")
-	mItem.AddSubMenuItem("Open plugins dir", "")
 }

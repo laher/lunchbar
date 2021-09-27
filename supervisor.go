@@ -12,29 +12,18 @@ import (
 	ipc "github.com/james-barrow/golang-ipc"
 
 	"github.com/matryer/xbar/pkg/plugins"
-	"github.com/pkg/errors"
-)
-
-var (
-	configFile = filepath.Join(rootDir(), "crossbar.config.json")
 )
 
 type supervisor struct {
-	lock   sync.Mutex
-	config *config
-	ipcs   map[string]*ipc.Server
-	log    *log.Entry
+	lock sync.Mutex
+	ipcs map[string]*ipc.Server
+	log  *log.Entry
 }
 
 func newSupervisor() (*supervisor, error) {
-	config, err := loadConfig(configFile)
-	if err != nil {
-		return nil, errors.Wrap(err, "loadConfig")
-	}
 	s := &supervisor{
-		config: config,
-		ipcs:   map[string]*ipc.Server{},
-		log:    log.WithField("t", "supervisor").WithField("pid", os.Getpid()),
+		ipcs: map[string]*ipc.Server{},
+		log:  log.WithField("t", "supervisor").WithField("pid", os.Getpid()),
 	}
 	return s, nil
 }
@@ -56,7 +45,7 @@ const (
 	msgcodeDefault = 1
 )
 
-func (s *supervisor) sendIPC(m string, key string) {
+func (s *supervisor) sendIPC(m, key string) {
 	err := s.ipcs[key].Write(msgcodeDefault, []byte(m))
 	if err != nil {
 		s.log.Warnf("could not write to client: %s", err)
@@ -103,7 +92,7 @@ func (s *supervisor) StartAll() {
 			cmd.Stderr = os.Stdout
 			err := cmd.Run()
 			if err != nil {
-				s.log.Errorf("error running %s: %s", commandExec, err)
+				s.log.WithField("plugin", filepath.Base(plugin.Command)).Errorf("error running %s: %s", commandExec, err)
 				return
 			}
 			err = sc.Write(msgcodeDefault, []byte("hello client. I refreshed"))

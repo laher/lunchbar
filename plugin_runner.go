@@ -27,11 +27,11 @@ type pluginRunner struct {
 	log         *log.Entry
 }
 
-func newPluginRunner(bin string, ipc *ipc.Client) *pluginRunner {
+func newPluginRunner(bin string, ipcc *ipc.Client) *pluginRunner {
 	p := plugins.NewPlugin(bin)
 	r := &pluginRunner{
 		plugin:      p,
-		ipc:         ipc,
+		ipc:         ipcc,
 		items:       []*itemWrap{},
 		subitems:    map[*itemWrap][]*itemWrap{},
 		subsubitems: map[*itemWrap][]*itemWrap{},
@@ -63,9 +63,7 @@ func (r *pluginRunner) init() func() {
 			time.Sleep(5 * time.Second)
 			r.loop()
 		}()
-
 	}
-
 }
 
 func (r *pluginRunner) loop() {
@@ -89,6 +87,8 @@ func (r *pluginRunner) sendIPC(s string) {
 	}
 }
 
+const osWindows = "windows"
+
 func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 	r.plugin.Refresh(ctx)
 	r.sendIPC("I refreshed")
@@ -97,16 +97,15 @@ func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 	systray.SetTooltip(title) // not all platforms
 	// necessary for windows - set title and icon ...
 	ic, err := getTextIcon(title[0:1])
-	//ic, err := getTextIcon("C")
 	if err == nil {
-		if runtime.GOOS != "windows" || initial { // <- Windows seems to have problems with settings anything after icon
+		if runtime.GOOS != osWindows || initial { // <- Windows seems to have problems with settings anything after icon
 			systray.SetIcon(ic)
 		}
 	}
 
 	if initial {
 		r.addCrossbarMenu(title)
-	} else if runtime.GOOS == "windows" {
+	} else if runtime.GOOS == osWindows {
 		r.mainItem.SetTitle(title)
 	}
 
@@ -114,85 +113,103 @@ func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 	r.plugin.AppleScriptTemplate = appleScriptDefaultTemplate
 	r.log.Infof("found %d items", len(r.plugin.Items.ExpandedItems))
 	for index, item := range r.plugin.Items.ExpandedItems {
-		var itemW *itemWrap
-		if item.Params.Separator {
-			if len(r.items) < index+1 {
-				itemW = &itemWrap{isSeparator: true, plugItem: item}
-				itemW.trayItem = systray.AddMenuItem("----------", "separator")
-				r.items = append(r.items, itemW)
-			} else {
-				itemW = r.items[index]
-				itemW.plugItem = item
-				itemW.trayItem.SetTitle("-------------")
-				itemW.trayItem.Show()
-			}
-			itemW.isSeparator = true
-			//itemW.trayItem.Disable()
-			r.items = append(r.items, itemW)
-		} else {
-			if len(r.items) < index+1 {
-				itemW = &itemWrap{isSeparator: false, plugItem: item}
-				itemW.trayItem = systray.AddMenuItem(item.DisplayText(), "tooltip")
-				r.items = append(r.items, itemW)
-				r.handleAction(itemW)
-			} else {
-				itemW = r.items[index]
-				itemW.trayItem.SetTitle(item.DisplayText())
-				itemW.trayItem.Show()
-			}
-			if len(item.Items) > 0 {
-				subitemWs := r.subitems[itemW]
-				if subitemWs == nil {
-					subitemWs = []*itemWrap{}
-				}
-				for subindex, subitem := range item.Items {
-					var subitemW *itemWrap
-					if len(subitemWs) < subindex+1 {
-						subitemW = &itemWrap{isSeparator: false, plugItem: subitem}
-						subitemW.trayItem = itemW.trayItem.AddSubMenuItem(subitem.DisplayText(), "tooltip")
-						subitemWs = append(subitemWs, subitemW)
-						r.handleAction(subitemW)
-					} else {
-						subitemW = subitemWs[subindex]
-						subitemW.trayItem.SetTitle(subitem.DisplayText())
-						subitemW.trayItem.Show()
-					}
-					if len(subitem.Items) > 0 {
-						subsubitemWs := r.subsubitems[subitemW]
-						if subsubitemWs == nil {
-							subsubitemWs = []*itemWrap{}
-						}
-						for subsubindex, subsubitem := range subitem.Items {
-							var subsubitemW *itemWrap
-							if len(subsubitemWs) < subsubindex+1 {
-								subsubitemW = &itemWrap{isSeparator: false, plugItem: subsubitem}
-								subsubitemW.trayItem = subitemW.trayItem.AddSubMenuItem(subsubitem.DisplayText(), "tooltip")
-								subsubitemWs = append(subsubitemWs, subsubitemW)
-								r.handleAction(subsubitemW)
-							} else {
-								subsubitemW = subsubitemWs[subsubindex]
-								subsubitemW.trayItem.SetTitle(subsubitem.DisplayText())
-								subsubitemW.trayItem.Show()
-							}
-						}
-						r.subsubitems[subitemW] = subsubitemWs
-					}
-				}
-				r.subitems[itemW] = subitemWs
-			}
-		}
+		r.loadItem(index, item)
 	}
 	if len(r.plugin.Items.ExpandedItems) < len(r.items) {
 		for i := len(r.plugin.Items.ExpandedItems); i < len(r.items); i++ {
 			r.items[i].trayItem.Hide()
 		}
 	}
+}
 
+func (r *pluginRunner) loadItem(index int, item *plugins.Item) {
+	var itemW *itemWrap
+	if item.Params.Separator {
+		if len(r.items) < index+1 {
+			itemW = &itemWrap{isSeparator: true, plugItem: item}
+			itemW.trayItem = systray.AddMenuItem("----------", "separator")
+			r.items = append(r.items, itemW)
+			r.handleAction(itemW)
+		} else {
+			itemW = r.items[index]
+			itemW.isSeparator = true
+			itemW.plugItem = item
+			itemW.trayItem.SetTitle("-------------")
+			itemW.trayItem.Show()
+		}
+		// itemW.trayItem.Disable()
+		r.items = append(r.items, itemW)
+	} else {
+		if len(r.items) < index+1 {
+			itemW = &itemWrap{isSeparator: false, plugItem: item}
+			itemW.trayItem = systray.AddMenuItem(item.DisplayText(), "tooltip")
+			r.items = append(r.items, itemW)
+			r.handleAction(itemW)
+		} else {
+			itemW = r.items[index]
+			itemW.isSeparator = false
+			itemW.trayItem.SetTitle(item.DisplayText())
+			itemW.trayItem.Show()
+		}
+		if len(item.Items) > 0 {
+			subitemWs := r.subitems[itemW]
+			if subitemWs == nil {
+				subitemWs = []*itemWrap{}
+			}
+			for subindex, subitem := range item.Items {
+				r.loadSubitem(itemW, subitemWs, subindex, subitem)
+			}
+			r.subitems[itemW] = subitemWs
+
+			if len(item.Items) < len(subitemWs) {
+				for i := len(item.Items); i < len(subitemWs); i++ {
+					subitemWs[i].trayItem.Hide()
+				}
+			}
+		}
+	}
+}
+
+func (r *pluginRunner) loadSubitem(itemW *itemWrap, subitemWs []*itemWrap, subindex int, subitem *plugins.Item) {
+	var subitemW *itemWrap
+	if len(subitemWs) < subindex+1 {
+		subitemW = &itemWrap{isSeparator: false, plugItem: subitem}
+		subitemW.trayItem = itemW.trayItem.AddSubMenuItem(subitem.DisplayText(), "tooltip")
+		subitemWs = append(subitemWs, subitemW)
+		r.handleAction(subitemW)
+	} else {
+		subitemW = subitemWs[subindex]
+		subitemW.trayItem.SetTitle(subitem.DisplayText())
+		subitemW.trayItem.Show()
+	}
+	if len(subitem.Items) > 0 {
+		subsubitemWs := r.subsubitems[subitemW]
+		if subsubitemWs == nil {
+			subsubitemWs = []*itemWrap{}
+		}
+		for subsubindex, subsubitem := range subitem.Items {
+			var subsubitemW *itemWrap
+			if len(subsubitemWs) < subsubindex+1 {
+				subsubitemW = &itemWrap{isSeparator: false, plugItem: subsubitem}
+				subsubitemW.trayItem = subitemW.trayItem.AddSubMenuItem(subsubitem.DisplayText(), "tooltip")
+				subsubitemWs = append(subsubitemWs, subsubitemW)
+				r.handleAction(subsubitemW)
+			} else {
+				subsubitemW = subsubitemWs[subsubindex]
+				subsubitemW.trayItem.SetTitle(subsubitem.DisplayText())
+				subsubitemW.trayItem.Show()
+			}
+		}
+		r.subsubitems[subitemW] = subsubitemWs
+		if len(subitem.Items) < len(subsubitemWs) {
+			for i := len(subitem.Items); i < len(subsubitemWs); i++ {
+				subitemWs[i].trayItem.Hide()
+			}
+		}
+	}
 }
 
 func (r *pluginRunner) handleAction(item *itemWrap) {
-	//item *plugins.Item, clickedChan <-chan struct{}) {
-
 	go func() {
 		for range item.trayItem.ClickedCh {
 			// only run one action at once. avoids stuck actions from accumulating
