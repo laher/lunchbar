@@ -40,7 +40,7 @@ func makeImage(label string) (image.Image, error) {
 		fontSize = 24.0
 	)
 
-	draw.Draw(img, img.Bounds(), image.NewUniform(white), image.ZP, draw.Src)
+	draw.Draw(img, img.Bounds(), image.NewUniform(white), image.Point{}, draw.Src)
 	ctx := freetype.NewContext()
 	f, err := truetype.Parse(gomonobold.TTF)
 	if err != nil {
@@ -53,12 +53,6 @@ func makeImage(label string) (image.Image, error) {
 	ctx.SetDst(img)
 	ctx.SetSrc(image.NewUniform(blue))
 	ctx.SetClip(img.Bounds())
-	/*
-		pt := freetype.Pt(x, y+int(ctx.PointToFixed(fontSize)>>6))
-		if _, err := ctx.DrawString(label, pt); err != nil {
-			return nil, err
-		}
-	*/
 
 	// Draw the text to the background
 	pt := freetype.Pt(6, 1+int(ctx.PointToFixed(fontSize)>>6))
@@ -73,5 +67,4 @@ func makeImage(label string) (image.Image, error) {
 	pt.Y += ctx.PointToFixed(fontSize * 1.5) // spacing
 
 	return img, nil
-
 }

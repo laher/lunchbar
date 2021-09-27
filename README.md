@@ -65,30 +65,30 @@ Focus of M1 is to get something usable working across OSes ...
  - [x] parse and handle plugin output
    - [x] href, shell, terminal[mac]
  - [x] 2 modes - supervisor and runner
-   - [ ] IPC
+   - [x] IPC
  - [x] Quit
- - [ ] Refreshing
-   - [ ] Refresh button
-   - [ ] Refresh on timer
-   - [ ] Refresh all (IPC)
- - [ ] Cross platform work
+ - [x] Refreshing
+   - [x] Refresh button
+   - [x] Refresh on timer
+   - [x] Refresh all (IPC)
+ - [x] Cross platform work
    - [x] Mac support
-   - [ ] Support icon instead of text. Basic.
-   - [ ] Verify
-      - [ ] Test on Linux
-      - [ ] Test on Windows
+   - [x] Support icon instead of text. Basic.
+   - [x] Verify
+      - [x] Test on Linux
+      - [x] Test on Windows
  - [ ] Error handling
    - [ ] Show a sample when no plugins found
    - [ ] React to killed process
  - [ ] Testing 
    - [ ] Happy Path Tests
    - [ ] Error path tests
- - [ ] Build automation?!
 
 ### M2
 
 M2 is to add some convenience features ahead of plugin management
 
+ - [ ] Build automation?!
  - [ ] .env files
      - [ ] encrypted keys
  - [ ] Plugin-writing help 

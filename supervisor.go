@@ -52,8 +52,12 @@ func (s *supervisor) Listen(key string, ipcs *ipc.Server) {
 	}
 }
 
+const (
+	msgcodeDefault = 1
+)
+
 func (s *supervisor) sendIPC(m string, key string) {
-	err := s.ipcs[key].Write(14, []byte(m))
+	err := s.ipcs[key].Write(msgcodeDefault, []byte(m))
 	if err != nil {
 		s.log.Warnf("could not write to client: %s", err)
 	}
@@ -102,7 +106,7 @@ func (s *supervisor) StartAll() {
 				s.log.Errorf("error running %s: %s", commandExec, err)
 				return
 			}
-			err = sc.Write(14, []byte("hello client. I refreshed"))
+			err = sc.Write(msgcodeDefault, []byte("hello client. I refreshed"))
 			if err != nil {
 				s.log.Warnf("could not write to client %s", err)
 			}

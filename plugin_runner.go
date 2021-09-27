@@ -27,13 +27,6 @@ type pluginRunner struct {
 	log         *log.Entry
 }
 
-type itemWrap struct {
-	plugItem    *plugins.Item
-	trayItem    *systray.MenuItem
-	isSeparator bool
-	parent      *itemWrap
-}
-
 func newPluginRunner(bin string, ipc *ipc.Client) *pluginRunner {
 	p := plugins.NewPlugin(bin)
 	r := &pluginRunner{
@@ -48,15 +41,15 @@ func newPluginRunner(bin string, ipc *ipc.Client) *pluginRunner {
 	return r
 }
 
-func (p *pluginRunner) Listen() {
+func (r *pluginRunner) Listen() {
 	for {
-		p.log.Infof("listen for messages ")
-		m, err := p.ipc.Read()
+		r.log.Infof("listen for messages ")
+		m, err := r.ipc.Read()
 		if err != nil {
-			p.log.Errorf("IPC server error %s", err)
+			r.log.Errorf("IPC server error %s", err)
 			break
 		}
-		p.log.WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Infof("plugin runner received message")
+		r.log.WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Infof("plugin runner received message")
 	}
 }
 
@@ -75,79 +68,6 @@ func (r *pluginRunner) init() func() {
 
 }
 
-func (r *pluginRunner) addCrossbarMenu(title string) {
-	r.mainItem = systray.AddMenuItem(title, "crossbar functionality")
-	systray.AddSeparator()
-
-	mRefresh := r.mainItem.AddSubMenuItem("Refresh", "Refresh script")
-	go func() {
-		<-mRefresh.ClickedCh
-		r.log.Info("Requesting refresh")
-		r.lock.Lock()
-		defer r.lock.Unlock()
-		ctx := context.Background()
-		r.refresh(ctx, false)
-		r.log.Info("Finished refresh request")
-
-	}()
-	// TODO - what to do if EDITOR not set. VISUAL? Look for a default program? TextEdit/notepad/etc?
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		log.Warn("EDITOR not set")
-	} else {
-		mOpen := r.mainItem.AddSubMenuItem("Edit plugin script", "edit script")
-		go func() {
-			<-mOpen.ClickedCh
-			r.log.Info("Requesting open file")
-			r.lock.Lock()
-			defer r.lock.Unlock()
-			ctx := context.Background()
-
-			// for now ... use EDITOR?
-			log.Infof("running %s", editor)
-			item := &plugins.Item{
-				Params: plugins.ItemParams{
-					Shell:       editor,
-					ShellParams: []string{r.plugin.Command},
-					Terminal:    true,
-				},
-				Plugin: r.plugin,
-			}
-			af := item.Action()
-			af(ctx)
-			r.log.Info("Finished file open request")
-
-		}()
-	}
-	mOpenDir := r.mainItem.AddSubMenuItem("Open plugin scripts dir", "open scripts dir")
-	go func() {
-		<-mOpenDir.ClickedCh
-		r.log.Info("Requesting open dir")
-		r.lock.Lock()
-		defer r.lock.Unlock()
-		item := &plugins.Item{
-			Params: plugins.ItemParams{
-				// href handler uses 'open' etc.
-				Href: filepath.Dir(r.plugin.Command),
-			},
-			Plugin: r.plugin,
-		}
-		ctx := context.Background()
-		af := item.Action()
-		af(ctx)
-		r.log.Info("Finished open dir request")
-
-	}()
-	mQuit := r.mainItem.AddSubMenuItem("Quit", "Quit crossbar")
-	go func() {
-		<-mQuit.ClickedCh
-		r.log.Info("Requesting quit")
-		systray.Quit()
-		r.log.Info("Finished quit request")
-
-	}()
-}
-
 func (r *pluginRunner) loop() {
 	if r.plugin.RefreshInterval.Duration() > 0 {
 		ctx := context.Background()
@@ -163,7 +83,7 @@ func (r *pluginRunner) loop() {
 }
 
 func (r *pluginRunner) sendIPC(s string) {
-	err := r.ipc.Write(14, []byte(s))
+	err := r.ipc.Write(msgcodeDefault, []byte(s))
 	if err != nil {
 		r.log.Warnf("could not write to server: %s", err)
 	}
@@ -214,6 +134,7 @@ func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 				itemW = &itemWrap{isSeparator: false, plugItem: item}
 				itemW.trayItem = systray.AddMenuItem(item.DisplayText(), "tooltip")
 				r.items = append(r.items, itemW)
+				r.handleAction(itemW)
 			} else {
 				itemW = r.items[index]
 				itemW.trayItem.SetTitle(item.DisplayText())
@@ -230,6 +151,7 @@ func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 						subitemW = &itemWrap{isSeparator: false, plugItem: subitem}
 						subitemW.trayItem = itemW.trayItem.AddSubMenuItem(subitem.DisplayText(), "tooltip")
 						subitemWs = append(subitemWs, subitemW)
+						r.handleAction(subitemW)
 					} else {
 						subitemW = subitemWs[subindex]
 						subitemW.trayItem.SetTitle(subitem.DisplayText())
@@ -246,22 +168,17 @@ func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 								subsubitemW = &itemWrap{isSeparator: false, plugItem: subsubitem}
 								subsubitemW.trayItem = subitemW.trayItem.AddSubMenuItem(subsubitem.DisplayText(), "tooltip")
 								subsubitemWs = append(subsubitemWs, subsubitemW)
+								r.handleAction(subsubitemW)
 							} else {
 								subsubitemW = subsubitemWs[subsubindex]
 								subsubitemW.trayItem.SetTitle(subsubitem.DisplayText())
 								subsubitemW.trayItem.Show()
 							}
-							r.handleAction(subsubitemW)
 						}
 						r.subsubitems[subitemW] = subsubitemWs
-					} else {
-						r.handleAction(subitemW)
 					}
 				}
 				r.subitems[itemW] = subitemWs
-			} else {
-				// only handle an action if this doesn't have children
-				r.handleAction(itemW)
 			}
 		}
 	}
@@ -281,13 +198,8 @@ func (r *pluginRunner) handleAction(item *itemWrap) {
 			// only run one action at once. avoids stuck actions from accumulating
 			r.log.Infof("Clicked item %+v", item)
 			r.lock.Lock()
-			if item.plugItem != nil {
-				ctx := context.Background()
-				action := item.plugItem.Action()
-				if action != nil {
-					action(ctx)
-				}
-			}
+			ctx := context.Background()
+			item.DoAction(ctx)
 			r.log.Infof("click action complete")
 			r.lock.Unlock()
 		}

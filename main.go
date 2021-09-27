@@ -73,5 +73,4 @@ func main() {
 func appMenu(mItem *systray.MenuItem) {
 	mItem.AddSubMenuItem("Refresh", "")
 	mItem.AddSubMenuItem("Open plugins dir", "")
-
 }
