@@ -38,36 +38,18 @@ func isExecutable(fi os.FileMode) bool {
 func main() {
 	pluginPtr := flag.String("plugin", "", "run plugin by name")
 	listPlugins := flag.Bool("list", false, "list plugins")
-	elvishPluginPtr := flag.String("elvish", "", "run an elvish plugin as a standard command")
+	elvishScriptPtr := flag.String("elvish-script", "", "run an elvish plugin as a standard command")
+	elvishShellPtr := flag.Bool("elvish", false, "run an elvish shell prompt")
 	flag.Parse()
-	if *elvishPluginPtr != "" { // load from plugin
-		godotenv.Load(filepath.Base(*elvishPluginPtr) + ".env")
-		bin := *elvishPluginPtr
-		if !strings.Contains(*elvishPluginPtr, "/") {
-			bin = filepath.Join(pluginsDir(), *elvishPluginPtr)
+	if *elvishShellPtr { // load from plugin
+		elvishPrompt(append([]string{""}, flag.Args()...))
+	} else if *elvishScriptPtr != "" { // load from plugin
+		godotenv.Load(filepath.Base(*elvishScriptPtr) + ".env")
+		bin := *elvishScriptPtr
+		if !strings.Contains(*elvishScriptPtr, "/") {
+			bin = filepath.Join(pluginsDir(), *elvishScriptPtr)
 		}
-		/*
-			f, err := os.Open(bin)
-			//f, err := os.ReadFile(bin)
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
-		*/
-		elvish(bin, os.Stdout, os.Stderr, append([]string{""}, flag.Args()...))
-		/*
-			ctx := context.Background()
-			cmd := exec.CommandContext(ctx, bin)
-			cmd.Dir = pluginsDir()
-			cmd.Stderr = os.Stderr
-			cmd.Stdin = os.Stdin
-			cmd.Stdout = os.Stdout
-			err := cmd.Run()
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
-		*/
+		elvishRunScript(bin, os.Stdout, os.Stderr, append([]string{""}, flag.Args()...))
 	} else if *pluginPtr != "" { // load from plugin
 		godotenv.Load(filepath.Base(*pluginPtr) + ".env")
 		key := "crossbar_" + filepath.Base(*pluginPtr)

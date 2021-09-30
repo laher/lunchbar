@@ -29,6 +29,7 @@ require (
 	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
+	go.etcd.io/bbolt v1.3.5 // indirect
 	golang.org/x/sys v0.0.0-20210820121016-41cdb8703e55 // indirect
 )
 

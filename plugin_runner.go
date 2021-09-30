@@ -31,7 +31,7 @@ type pluginRunner struct {
 func (r *pluginRunner) refreshItems(ctx context.Context) {
 	if strings.HasSuffix(r.plugin.Command, ".elvish") || strings.HasSuffix(r.plugin.Command, ".elv") {
 		// run it and parse output
-		out, err := elvish(r.plugin.Command, os.Stdout, os.Stderr, []string{r.plugin.Command})
+		out, err := elvishRunScript(r.plugin.Command, os.Stdout, os.Stderr, []string{r.plugin.Command})
 		if err != nil {
 			r.plugin.OnErr(err)
 			return

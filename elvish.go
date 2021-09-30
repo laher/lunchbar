@@ -4,12 +4,22 @@ import (
 	"errors"
 	"os"
 
+	"src.elv.sh/pkg/buildinfo"
+	"src.elv.sh/pkg/daemon/client"
 	"src.elv.sh/pkg/eval"
 	"src.elv.sh/pkg/parse"
 	"src.elv.sh/pkg/prog"
+	"src.elv.sh/pkg/shell"
 )
 
-func elvish(bin string, out, stderr *os.File, args []string) ([]string, error) {
+func elvishPrompt(args []string) error {
+	os.Exit(prog.Run(
+		[3]*os.File{os.Stdin, os.Stdout, os.Stderr}, args,
+		buildinfo.Program, daemonStub{}, shell.Program{ActivateDaemon: client.Activate}))
+	return nil
+}
+
+func elvishRunScript(bin string, out, stderr *os.File, args []string) ([]string, error) {
 	f, err := os.ReadFile(bin)
 	if err != nil {
 		return []string{}, err
