@@ -15,16 +15,20 @@ import (
 	"github.com/matryer/xbar/pkg/plugins"
 )
 
-// TODO - OS-dependent dir? (xbar uses ~/Library/Application\ Support )
-func rootDir() string {
+func homeDir() string {
+
 	var homeDir string
 	if runtime.GOOS == osWindows {
 		homeDir = os.Getenv("USERPROFILE")
 	} else {
 		homeDir = os.Getenv("HOME")
 	}
+	return homeDir
+}
 
-	return filepath.Join(homeDir, ".config", "lunchbar")
+// TODO - OS-dependent dir? (xbar uses ~/Library/Application\ Support )
+func rootDir() string {
+	return filepath.Join(homeDir(), ".config", "lunchbar")
 }
 
 func pluginsDir() string {

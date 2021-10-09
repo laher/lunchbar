@@ -25,17 +25,19 @@ func elvishRunScript(bin string, out, stderr *os.File, args []string) ([]string,
 		return []string{}, err
 	}
 	s := parse.Source{Name: bin, Code: string(f), IsFile: true}
-	e := eval.NewEvaler()
+
+	// this evaler imports the standard libraries
+	e := shell.MakeEvaler(os.Stderr)
 	capture, fetcher, err := eval.StringCapturePort()
 	if err != nil {
 		return []string{}, err
 	}
 	cfg := eval.EvalCfg{
 		PutInFg: true,
-		Ports:   []*eval.Port{eval.DummyInputPort, capture, eval.DummyOutputPort}, // TODO stop using dummy output
+		Ports:   []*eval.Port{eval.DummyInputPort, capture, capture}, // TODO maybe 2 output ports?
 	}
 
-	/* load env
+	/* TODO - load env?
 	variable := eval.MakeVarFromName(name)
 	err := variable.Set(val)
 	if err != nil {
@@ -49,13 +51,6 @@ func elvishRunScript(bin string, out, stderr *os.File, args []string) ([]string,
 	}
 
 	return fetcher(), nil
-
-	/*
-		os.Exit(prog.Run(
-			[3]*os.File{in, out, stderr}, args,
-			buildinfo.Program, daemonStub{}, shell.Program{}))
-	*/
-	// ? prog.Composite(buildinfo.Program, daemonStub{}, shell.Program{})))
 }
 
 var errNoDaemon = errors.New("daemon is not supported in this build")
