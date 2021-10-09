@@ -10,8 +10,8 @@ import (
 	"github.com/matryer/xbar/pkg/plugins"
 )
 
-func (r *pluginRunner) addCrossbarMenu(title string) {
-	r.mainItem = systray.AddMenuItem(title, "crossbar functionality")
+func (r *pluginRunner) LunchbarMenu(title string) {
+	r.mainItem = systray.AddMenuItem(title, "lunchbar functionality")
 	systray.AddSeparator()
 
 	mRefresh := r.mainItem.AddSubMenuItem("Refresh", "Refresh script")
@@ -73,7 +73,7 @@ func (r *pluginRunner) addCrossbarMenu(title string) {
 		r.log.Info("Finished open dir request")
 	}()
 
-	mQuit := r.mainItem.AddSubMenuItem("Quit", "Quit crossbar")
+	mQuit := r.mainItem.AddSubMenuItem("Quit", "Quit lunchbar")
 	go func() {
 		<-mQuit.ClickedCh
 		r.log.Info("Requesting quit")

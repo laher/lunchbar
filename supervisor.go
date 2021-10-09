@@ -79,7 +79,7 @@ func (s *supervisor) StartAll() {
 		ctx := context.Background()
 		key := filepath.Base(plugin.Command)
 		s.log.Infof("starting %s %s", thisExecutable, key)
-		sc, err := ipc.StartServer("crossbar_"+key, nil)
+		sc, err := ipc.StartServer("lunchbar_"+key, nil)
 		if err != nil {
 			log.Errorf("could not start IPC server: %s", err)
 			return

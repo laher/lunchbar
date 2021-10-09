@@ -124,7 +124,7 @@ func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 	}
 
 	if initial {
-		r.addCrossbarMenu(title)
+		r.LunchbarMenu(title)
 	} else if runtime.GOOS == osWindows {
 		r.mainItem.SetTitle(title)
 	}

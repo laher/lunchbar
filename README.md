@@ -1,22 +1,24 @@
-# Crossbar
+# Lunchbar
 
 **VERY EARLY POC - NOT READY YET**
 
-Crossbar is an [xbar](https://github.com/matryer/xbar) clone which is targeted for cross-platform use on Mac, Linux and Windows.
+Lunchbar is an [xbar](https://github.com/matryer/xbar) clone which is targeted for cross-platform use on Mac, Linux and Windows.
 
-The main point of this project is to be able to share plugins and tools between team-mates, even if they're not using the same Operating System.
+The main point of this project is to be able to easily share plugins and tools between team-mates, even if they're not using the same Operating System.
+
+Lunchbar uses [lunchbox](https://github.com/laher/lunchbox) to provide batteries-included support for cross-platform plugins
 
 ## Comparison
 
-What are the similarities and differences between xbar and crossbar?
+What are the similarities and differences between xbar and lunchbar?
 
-`crossbar` is in very early stages, but this should cover the conceptual differences & similarities...
+`lunchbar` is in very early stages, but this should cover the conceptual differences & similarities...
 
 ### Commonality
 
- * they're both written in go
- * The plugin design and format is the same. I plan to add some metadata tags, but that's all (for now).
-   * crossbar depends on xbar packages. So, the look and feel is very similar. On Mac at least.
+ * they're both written in go.
+ * The plugin design and format is the same. I plan to add some metadata tags, but that's all (for now). Anything beyond that I'll try to upstream to xbar.
+   * lunchbar depends on xbar packages, including the emoji support. So, the look and feel is very similar. On Mac at least.
 
 ### Key differences from xbar
 
@@ -29,32 +31,36 @@ What are the similarities and differences between xbar and crossbar?
     * Hope to write some support for building cross-platform plugins easily. e.g. a bundled `elvish` interpreter
  * Reduced feature set.
    * No plugin browser or other UI (for the time being)
-   * Some features might be hard to implement in a cross-platform way. 
+   * Some features are hard to implement in a cross-platform way.
+     * icons only for some platforms. The first item shows what would normally be in the list.
+     * IPC - lunchbar uses getlantern/systray instead of wails. This is already cross-platform, but it's different... only one systray icon per process. So, this tool launches one process per icon.
+ * Little differences:
+   * The 'lunchbar menu' is at the top
 
 ### Hopes and dreams
 
- * Some form of automated ENV management (<plugin>.env files) with some encryption support.
- * Some form of OS tagging for plugins.
- * Some support for easily building cross-platform plugins in bash/elvish/go/etc
+ * Support for easily building cross-platform plugins in bash/elvish/go/etc
+ * OS tagging for plugins.
  * Some mechanism to discover and install plugins. Possibly similar to the xbar wasy. Not sure.
+ * Some form of automated ENV management (<plugin>.env files) with some encryption support.
 
 
 ## Installation
 
-For now, it's not pre-packaged. Please install crossbar using the Go compiler.
+For now, it's not pre-packaged. Please install lunchbar using the Go compiler.
 
  1. Check getlantern/systray's docs for installing pre-requisites.
- 2. Install crossbar
+ 2. Install lunchbar
 
-    go install github.com/laher/crossbar@latest
+    go install github.com/laher/lunchbar@latest
 
- 3. Run crossbar
+ 3. Run lunchbar
 
-    crossbar
+    lunchbar
 
- 4. Run crossbar with a single plugin (plugins should be any executable located in $HOME/.config/crossbar/plugins/)
+ 4. Run lunchbar with a single plugin (plugins should be any executable located in $HOME/.config/lunchbar/plugins/)
 
-    crossbar myplugin.sh
+    lunchbar myplugin.sh
 
 ## Progress
 

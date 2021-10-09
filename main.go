@@ -24,7 +24,7 @@ func rootDir() string {
 		homeDir = os.Getenv("HOME")
 	}
 
-	return filepath.Join(homeDir, ".config", "crossbar")
+	return filepath.Join(homeDir, ".config", "lunchbar")
 }
 
 func pluginsDir() string {
@@ -52,7 +52,7 @@ func main() {
 		elvishRunScript(bin, os.Stdout, os.Stderr, append([]string{""}, flag.Args()...))
 	} else if *pluginPtr != "" { // load from plugin
 		godotenv.Load(filepath.Base(*pluginPtr) + ".env")
-		key := "crossbar_" + filepath.Base(*pluginPtr)
+		key := "lunchbar_" + filepath.Base(*pluginPtr)
 		sc, err := ipc.StartClient(key, nil)
 		if err != nil {
 			log.Errorf("could not start IPC client: %s", err)

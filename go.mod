@@ -1,4 +1,4 @@
-module github.com/laher/crossbar
+module github.com/laher/lunchbar
 
 go 1.17
 
