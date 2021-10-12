@@ -28,10 +28,10 @@ func getTextIcon(text string) ([]byte, error) {
 }
 
 var (
-	red   = color.RGBA{255, 0, 0, 255}
+	// red   = color.RGBA{255, 0, 0, 255}
 	blue  = color.RGBA{0, 0, 255, 255}
 	white = color.RGBA{255, 255, 255, 255}
-	black = color.RGBA{0, 0, 0, 255}
+	// black = color.RGBA{0, 0, 0, 255}
 )
 
 func makeImage(label string) (image.Image, error) {

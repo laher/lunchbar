@@ -14,6 +14,8 @@ func (r *pluginRunner) LunchbarMenu(title string) {
 	r.mainItem = systray.AddMenuItem(title, "lunchbar functionality")
 	systray.AddSeparator()
 
+	r.mainItem.AddSubMenuItem("lunchbar", "Lunchbar items")
+
 	mRefresh := r.mainItem.AddSubMenuItem("Refresh", "Refresh script")
 	go func() {
 		<-mRefresh.ClickedCh
@@ -25,6 +27,16 @@ func (r *pluginRunner) LunchbarMenu(title string) {
 		r.log.Info("Finished refresh request")
 	}()
 
+	mRefreshAll := r.mainItem.AddSubMenuItem("Refresh All", "Refresh all ids")
+	go func() {
+		<-mRefreshAll.ClickedCh
+		r.log.Info("Requesting refresh-all")
+		r.lock.Lock()
+		defer r.lock.Unlock()
+		ctx := context.Background()
+		r.refreshAll(ctx, false)
+		r.log.Info("Finished refresh-all request")
+	}()
 	// TODO - what to do if EDITOR not set. VISUAL? Look for a default program? TextEdit/notepad/etc?
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
@@ -76,8 +88,6 @@ func (r *pluginRunner) LunchbarMenu(title string) {
 	mQuit := r.mainItem.AddSubMenuItem("Quit", "Quit lunchbar")
 	go func() {
 		<-mQuit.ClickedCh
-		r.log.Info("Requesting quit")
-		systray.Quit()
-		r.log.Info("Finished quit request")
+		r.sendIPC(msgPluginQuit)
 	}()
 }

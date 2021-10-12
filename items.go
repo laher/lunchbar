@@ -11,7 +11,7 @@ type itemWrap struct {
 	plugItem    *plugins.Item
 	trayItem    *systray.MenuItem
 	isSeparator bool
-	parent      *itemWrap
+	// parent      *itemWrap
 
 	// could override standard xbar behaviour
 	action plugins.ActionFunc

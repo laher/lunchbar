@@ -9,13 +9,17 @@ require (
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 	github.com/james-barrow/golang-ipc v0.0.0-20210227130457-95e7cc81f5e2
 	github.com/joho/godotenv v1.4.0
+	github.com/laher/lunchbox v0.0.0-20211010103536-1ae8d3a1e43b
 	github.com/matryer/xbar/pkg/plugins v0.0.0-20210918110050-1410be750e94
 	golang.org/x/image v0.0.0-20210628002857-a66eb6448b8d
 	src.elv.sh v0.16.3
 )
 
 require (
+	code.cloudfoundry.org/bytefmt v0.0.0-20200131002437-cf55d5288a48 // indirect
 	github.com/Microsoft/go-winio v0.4.16 // indirect
+	github.com/VividCortex/ewma v1.1.1 // indirect
+	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
 	github.com/getlantern/context v0.0.0-20190109183933-c447772a6520 // indirect
 	github.com/getlantern/errors v0.0.0-20190325191628-abdb3e3e36f7 // indirect
 	github.com/getlantern/golog v0.0.0-20190830074920-4ef2e798c2d7 // indirect
@@ -23,14 +27,23 @@ require (
 	github.com/getlantern/hidden v0.0.0-20190325191715-f02dbb02be55 // indirect
 	github.com/getlantern/ops v0.0.0-20190325191751-d70cb0d6f85f // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
+	github.com/itchyny/gojq v0.12.5 // indirect
+	github.com/itchyny/timefmt-go v0.1.3 // indirect
 	github.com/leaanthony/go-ansi-parser v1.2.0 // indirect
+	github.com/lestrrat-go/strftime v1.0.5 // indirect
+	github.com/logrusorgru/aurora v0.0.0-20200102142835-e9ef32dff381 // indirect
 	github.com/matryer/xbar/pkg/metadata v0.0.0-20210918110050-1410be750e94 // indirect
-	github.com/mattn/go-isatty v0.0.12 // indirect
+	github.com/mattn/go-isatty v0.0.13 // indirect
+	github.com/mtibben/androiddnsfix v0.0.0-20200907095054-ff0280446354 // indirect
+	github.com/nojima/httpie-go v0.7.0 // indirect
 	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c // indirect
+	github.com/pborman/getopt v0.0.0-20190409184431-ee0cd42419d3 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
+	github.com/vbauerster/mpb/v5 v5.0.2 // indirect
 	go.etcd.io/bbolt v1.3.5 // indirect
-	golang.org/x/sys v0.0.0-20210820121016-41cdb8703e55 // indirect
+	golang.org/x/crypto v0.0.0-20200302210943-78000ba7a073 // indirect
+	golang.org/x/sys v0.0.0-20210831042530-f4d43177bf5e // indirect
 )
 
 exclude github.com/matryer/xbar/pkg/metadata v0.0.0-00010101000000-000000000000
@@ -40,3 +53,5 @@ exclude github.com/matryer/xbar/pkg/metadata v0.0.0-00010101000000-000000000000
 replace github.com/matryer/xbar/pkg/plugins => github.com/laher/xbar/pkg/plugins v0.0.0-20210927175547-f69614fb2e13
 
 replace github.com/matryer/xbar/pkg/metadata => github.com/laher/xbar/pkg/metadata v0.0.0-20210927175547-f69614fb2e13
+
+replace github.com/laher/lunchbox => ../lunchbox

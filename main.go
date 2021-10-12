@@ -1,22 +1,19 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/apex/log"
-	"github.com/getlantern/systray"
-	ipc "github.com/james-barrow/golang-ipc"
-	"github.com/joho/godotenv"
+	"github.com/laher/lunchbox/lunch"
 	"github.com/matryer/xbar/pkg/plugins"
 )
 
 func homeDir() string {
-
 	var homeDir string
 	if runtime.GOOS == osWindows {
 		homeDir = os.Getenv("USERPROFILE")
@@ -35,41 +32,35 @@ func pluginsDir() string {
 	return filepath.Join(rootDir(), "plugins")
 }
 
-func isExecutable(fi os.FileMode) bool {
-	return fi.Perm()&0111 != 0
+// TODO isExecutable is OS-dependent
+// func isExecutable(fi os.FileMode) bool {
+//	return fi.Perm()&0111 != 0
+// }
+
+// claimAsLunchboxProvider - any child process should use this executable to provide lunchbox functionality
+// NOTE if LUNCHBOX_BIN is already set, respect that
+func claimAsLunchboxProvider() {
+	if os.Getenv("LUNCHBOX_BIN") == "" {
+		os.Setenv("LUNCHBOX_BIN", os.Args[0])
+	}
 }
 
 func main() {
-	pluginPtr := flag.String("plugin", "", "run plugin by name")
-	listPlugins := flag.Bool("list", false, "list plugins")
-	elvishScriptPtr := flag.String("elvish-script", "", "run an elvish plugin as a standard command")
-	elvishShellPtr := flag.Bool("elvish", false, "run an elvish shell prompt")
+	claimAsLunchboxProvider()
 	flag.Parse()
-	if *elvishShellPtr { // load from plugin
-		elvishPrompt(append([]string{""}, flag.Args()...))
-	} else if *elvishScriptPtr != "" { // load from plugin
-		godotenv.Load(filepath.Base(*elvishScriptPtr) + ".env")
-		bin := *elvishScriptPtr
-		if !strings.Contains(*elvishScriptPtr, "/") {
-			bin = filepath.Join(pluginsDir(), *elvishScriptPtr)
-		}
-		elvishRunScript(bin, os.Stdout, os.Stderr, append([]string{""}, flag.Args()...))
-	} else if *pluginPtr != "" { // load from plugin
-		godotenv.Load(filepath.Base(*pluginPtr) + ".env")
-		key := "lunchbar_" + filepath.Base(*pluginPtr)
-		sc, err := ipc.StartClient(key, nil)
+
+	subcommand := ""
+	if len(os.Args) > 1 {
+		subcommand = os.Args[1]
+	}
+	ctx := context.Background()
+	switch subcommand {
+	case "plugin":
+		err := runPlugin(ctx, os.Args[2:])
 		if err != nil {
-			log.Errorf("could not start IPC client: %s", err)
-			return
+			log.Errorf("Error loading plugin: %s", err)
 		}
-		bin := *pluginPtr
-		if !strings.Contains(*pluginPtr, "/") {
-			bin = filepath.Join(pluginsDir(), *pluginPtr)
-		}
-		r := newPluginRunner(bin, sc)
-		go r.Listen()
-		systray.Run(r.init(), r.onExit)
-	} else if *listPlugins {
+	case "list-plugins":
 		pls, err := plugins.Dir(pluginsDir())
 		if err != nil {
 			log.Warnf("Error loading plugins: %s", err)
@@ -78,12 +69,22 @@ func main() {
 			key := filepath.Base(plugin.Command)
 			fmt.Println(key)
 		}
-	} else {
-		s, err := newSupervisor()
-		if err != nil {
-			log.Errorf("could not set up supervisor: %s", err)
-			return
-		}
+	case "", "supervisor":
+		s := newSupervisor()
 		s.Start()
+	default:
+		ctx := lunch.Context{
+			Ctx: context.Background(),
+		}
+		lun, ok := lunch.Get(subcommand)
+
+		if !ok {
+			fmt.Println("expected a valid subcommand")
+			os.Exit(1)
+		}
+		if err := lun(ctx, os.Args[2:]); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
 	}
 }

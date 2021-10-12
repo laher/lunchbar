@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,8 +15,37 @@ import (
 	"github.com/apex/log"
 	"github.com/getlantern/systray"
 	ipc "github.com/james-barrow/golang-ipc"
+	"github.com/laher/lunchbox/lunch"
 	"github.com/matryer/xbar/pkg/plugins"
 )
+
+func runPlugin(ctx context.Context, args []string) error {
+	if err := os.Chdir(pluginsDir()); err != nil {
+		return err
+	}
+	var pluginCmd = flag.NewFlagSet("plugin", flag.ExitOnError)
+	var pluginPtr = pluginCmd.String("plugin", "", "name of plugin to run")
+	err := pluginCmd.Parse(args)
+	if err != nil {
+		return err
+	}
+	// TODO should we do dotenv?
+	// godotenv.Load(filepath.Base(*pluginPtr) + ".env")
+	key := "lunchbar_" + filepath.Base(*pluginPtr)
+	sc, err := ipc.StartClient(key, nil)
+	if err != nil {
+		log.Errorf("could not start IPC client: %s", err)
+		return err
+	}
+	bin := *pluginPtr
+	if !strings.Contains(*pluginPtr, "/") {
+		bin = filepath.Join(pluginsDir(), *pluginPtr)
+	}
+	r := newPluginRunner(bin, sc)
+	go r.Listen()
+	systray.Run(r.init(ctx), r.onExit)
+	return nil
+}
 
 type pluginRunner struct {
 	plugin      *plugins.Plugin
@@ -31,7 +61,7 @@ type pluginRunner struct {
 func (r *pluginRunner) refreshItems(ctx context.Context) {
 	if strings.HasSuffix(r.plugin.Command, ".elvish") || strings.HasSuffix(r.plugin.Command, ".elv") {
 		// run it and parse output
-		out, err := elvishRunScript(r.plugin.Command, os.Stdout, os.Stderr, []string{r.plugin.Command})
+		out, err := lunch.ElvishRunScript(ctx, []string{r.plugin.Command})
 		if err != nil {
 			r.plugin.OnErr(err)
 			return
@@ -45,8 +75,15 @@ func (r *pluginRunner) refreshItems(ctx context.Context) {
 	} else {
 		r.plugin.Refresh(ctx)
 	}
-	r.sendIPC("I refreshed")
+	r.sendIPC(msgPluginRefreshComplete)
 }
+
+const (
+	msgPluginUnrecognised    = "unrecognised"
+	msgPluginRefreshComplete = "refresh-complete"
+	msgPluginRefreshAll      = "refresh-all"
+	msgPluginQuit            = "quit"
+)
 
 func newPluginRunner(bin string, ipcc *ipc.Client) *pluginRunner {
 	p := plugins.NewPlugin(bin)
@@ -70,15 +107,29 @@ func (r *pluginRunner) Listen() {
 			r.log.Errorf("IPC server error %s", err)
 			break
 		}
-		r.log.WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Infof("plugin runner received message")
+		r.log.WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Info("plugin runner received message")
+
+		switch string(m.Data) {
+		case msgSupervisorRefresh:
+			r.refresh(context.Background(), false)
+		case msgSupervisorUnrecognised:
+			// TODO die here?
+			r.log.WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Warnf("supervisor did not recognise previous command")
+		case msgSupervisorQuit:
+			r.log.Info("Requesting systray quit")
+			systray.Quit()
+			r.log.Info("Finished quit request")
+		default:
+			r.log.WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Error("Received a message type which is not handled by this plugin")
+			r.sendIPC(msgPluginUnrecognised)
+		}
 	}
 }
 
-func (r *pluginRunner) init() func() {
+func (r *pluginRunner) init(ctx context.Context) func() {
 	r.log.Infof("launching systray icon")
 	return func() {
 		r.log.Infof("command %s", r.plugin.Command)
-		ctx := context.Background()
 		r.refresh(ctx, true)
 		go func() {
 			time.Sleep(5 * time.Second)
@@ -110,7 +161,15 @@ func (r *pluginRunner) sendIPC(s string) {
 
 const osWindows = "windows"
 
+func (r *pluginRunner) refreshAll(ctx context.Context, initial bool) {
+	r.sendIPC(msgPluginRefreshAll)
+
+}
+
 func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
+	// TODO locking
+	r.lock.Lock()
+	defer r.lock.Unlock()
 	r.refreshItems(ctx)
 	title := r.plugin.Items.CycleItems[0].DisplayText()
 	systray.SetTitle(title)   // doesn't do anything on windows.
@@ -156,8 +215,8 @@ func (r *pluginRunner) loadItem(index int, item *plugins.Item) {
 			itemW.plugItem = item
 			itemW.trayItem.SetTitle("-------------")
 			itemW.trayItem.Show()
+			itemW.trayItem.Disable()
 		}
-		// itemW.trayItem.Disable()
 		r.items = append(r.items, itemW)
 	} else {
 		if len(r.items) < index+1 {
@@ -170,6 +229,7 @@ func (r *pluginRunner) loadItem(index int, item *plugins.Item) {
 			itemW.isSeparator = false
 			itemW.trayItem.SetTitle(item.DisplayText())
 			itemW.trayItem.Show()
+			itemW.trayItem.Enable()
 		}
 		if len(item.Items) > 0 {
 			subitemWs := r.subitems[itemW]
