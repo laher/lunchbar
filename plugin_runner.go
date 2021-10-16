@@ -231,50 +231,41 @@ func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 
 func (r *pluginRunner) loadItem(index int, item *plugins.Item) {
 	var itemW *itemWrap
+	var title = ""
 	if item.Params.Separator {
-		if len(r.items) < index+1 {
-			itemW = &itemWrap{isSeparator: true, plugItem: item, subitems: []*itemWrap{}}
-			itemW.trayItem = systray.AddMenuItem("----------", "separator")
-			r.items = append(r.items, itemW)
-			r.handleAction(itemW)
-		} else {
-			itemW = r.items[index]
-			itemW.isSeparator = true
-			itemW.plugItem = item
-			itemW.trayItem.SetTitle("-------------")
-			itemW.trayItem.Show()
-			itemW.trayItem.Disable()
-		}
-		r.items = append(r.items, itemW)
+		r.log.Info("separator")
+		title = "----------"
 	} else {
-		if len(r.items) < index+1 {
-			itemW = &itemWrap{isSeparator: false, plugItem: item, subitems: []*itemWrap{}}
-			itemW.trayItem = systray.AddMenuItem(item.DisplayText(), "tooltip")
-			r.items = append(r.items, itemW)
-			r.handleAction(itemW)
-		} else {
-			itemW = r.items[index]
-			itemW.isSeparator = false
-			itemW.trayItem.SetTitle(item.DisplayText())
-			itemW.trayItem.Show()
+		r.log.Info("non-separator")
+		title = item.DisplayText()
+	}
+	if len(r.items) < index+1 {
+		itemW = &itemWrap{plugItem: item, subitems: []*itemWrap{}}
+		itemW.trayItem = systray.AddMenuItem(title, item.DisplayText())
+		r.items = append(r.items, itemW)
+		r.handleAction(itemW)
+	} else {
+		itemW = r.items[index]
+		itemW.trayItem.SetTitle(item.DisplayText())
+	}
+	itemW.plugItem = item
+	itemW.isSeparator = item.Params.Separator
+	itemW.trayItem.Show()
+	if len(item.Items) > 0 {
+		itemW.trayItem.Enable()
+		for subindex, subitem := range item.Items {
+			r.loadSubitem(itemW, subindex, subitem)
 		}
-		if len(item.Items) > 0 {
+		if len(item.Items) < len(itemW.subitems) {
+			for i := len(item.Items); i < len(itemW.subitems); i++ {
+				itemW.subitems[i].trayItem.Hide()
+			}
+		}
+	} else {
+		if !item.Params.Separator && itemW.plugItem.Action() != nil {
 			itemW.trayItem.Enable()
-			for subindex, subitem := range item.Items {
-				r.loadSubitem(itemW, subindex, subitem)
-			}
-
-			if len(item.Items) < len(itemW.subitems) {
-				for i := len(item.Items); i < len(itemW.subitems); i++ {
-					itemW.subitems[i].trayItem.Hide()
-				}
-			}
 		} else {
-			if itemW.plugItem.Action() != nil {
-				itemW.trayItem.Enable()
-			} else {
-				itemW.trayItem.Disable()
-			}
+			itemW.trayItem.Disable()
 		}
 	}
 }
