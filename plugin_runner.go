@@ -181,6 +181,11 @@ func (r *pluginRunner) refreshAll(ctx context.Context, initial bool) {
 
 }
 
+// TODO allow icon configuration (via dotenv?)
+func (r *pluginRunner) iconOnly() bool {
+	return runtime.GOOS == osWindows
+}
+
 func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 	r.log.Debug("refresh items")
 	err := r.refreshItems(ctx)
@@ -191,18 +196,24 @@ func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 	title := r.plugin.Items.CycleItems[0].DisplayText()
 	systray.SetTitle(title)   // doesn't do anything on windows.
 	systray.SetTooltip(title) // not all platforms
-	// necessary for windows - set title and icon ...
-	ic, err := getTextIcon(title[0:1])
-	if err == nil {
-		if runtime.GOOS != osWindows || initial { // <- Windows seems to have problems with settings anything after icon
-			systray.SetIcon(ic)
+
+	lunchbarTitle := "Lunchbar"
+	if r.iconOnly() {
+		// necessary for windows - set icon ...
+		// it's a bit ugly right now so just leave it for other platforms for now ...
+		ic, err := getTextIcon(strings.TrimSpace(title)[:1])
+		if err == nil {
+			if runtime.GOOS != osWindows || initial { // <- Windows seems to have problems with settings anything after icon
+				systray.SetIcon(ic)
+			}
 		}
+		lunchbarTitle = title
 	}
 
 	if initial {
-		r.LunchbarMenu(title)
-	} else { // TODO decide about non-windows. should we set the title still?
-		r.mainItem.SetTitle(title)
+		r.LunchbarMenu(lunchbarTitle)
+	} else {
+		r.mainItem.SetTitle(lunchbarTitle)
 	}
 
 	r.plugin.Debugf = r.log.Infof

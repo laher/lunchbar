@@ -15,11 +15,6 @@ func (r *pluginRunner) LunchbarMenu(title string) {
 	r.mainItem = systray.AddMenuItem(title, "Lunchbar menu")
 	systray.AddSeparator()
 
-	titleItem := r.mainItem.AddSubMenuItem("Lunchbar menu", "Lunchbar menu items")
-	titleItem.Disable()
-	sep := r.mainItem.AddSubMenuItem("__________", "")
-	sep.Disable()
-
 	mRefresh := r.mainItem.AddSubMenuItem("Refresh", "Refresh script")
 	go func() {
 		<-mRefresh.ClickedCh
