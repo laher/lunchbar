@@ -5,8 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/apex/log"
 	"github.com/laher/lunchbox/lunch"
@@ -39,9 +41,18 @@ func pluginsDir() string {
 
 // claimAsLunchboxProvider - any child process should use this executable to provide lunchbox functionality
 // NOTE if LUNCHBOX_BIN is already set, respect that
+// NOTE use the full path to the executable
 func claimAsLunchboxProvider() {
 	if os.Getenv("LUNCHBOX_BIN") == "" {
-		os.Setenv("LUNCHBOX_BIN", os.Args[0])
+		bin := os.Args[0]
+		if !strings.Contains(bin, string(os.PathSeparator)) {
+			path, err := exec.LookPath(bin)
+			if err == nil {
+				fmt.Printf("bin is available at %s\n", path)
+				bin = path
+			}
+		}
+		os.Setenv("LUNCHBOX_BIN", bin)
 	}
 }
 
@@ -60,6 +71,10 @@ func main() {
 		if err != nil {
 			log.Errorf("Error loading plugin: %s", err)
 		}
+	case "", "supervisor":
+		s := newSupervisor()
+		s.Start()
+
 	case "list-plugins":
 		pls, err := plugins.Dir(pluginsDir())
 		if err != nil {
@@ -69,9 +84,7 @@ func main() {
 			key := filepath.Base(plugin.Command)
 			fmt.Println(key)
 		}
-	case "", "supervisor":
-		s := newSupervisor()
-		s.Start()
+
 	default:
 		ctx := lunch.Context{
 			Ctx: context.Background(),

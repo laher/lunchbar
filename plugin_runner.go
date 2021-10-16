@@ -48,60 +48,65 @@ func runPlugin(ctx context.Context, args []string) error {
 }
 
 type pluginRunner struct {
-	plugin      *plugins.Plugin
-	lock        sync.Mutex
-	ipc         *ipc.Client
-	mainItem    *systray.MenuItem
-	items       []*itemWrap
-	subitems    map[*itemWrap][]*itemWrap
-	subsubitems map[*itemWrap][]*itemWrap
-	log         *log.Entry
+	plugin   *plugins.Plugin
+	lock     sync.Mutex
+	ipc      *ipc.Client
+	mainItem *systray.MenuItem
+	items    []*itemWrap
+	log      *log.Entry
+	//subitems    [][]*itemWrap
+	//subsubitems [][]*itemWrap
 }
 
-func (r *pluginRunner) refreshItems(ctx context.Context) {
+func (r *pluginRunner) refreshItems(ctx context.Context) error {
+	if err := os.Chdir(pluginsDir()); err != nil {
+		r.plugin.OnErr(err)
+		return err
+	}
 	if strings.HasSuffix(r.plugin.Command, ".elvish") || strings.HasSuffix(r.plugin.Command, ".elv") {
 		// run it and parse output
 		out, err := lunch.ElvishRunScript(ctx, []string{r.plugin.Command})
 		if err != nil {
 			r.plugin.OnErr(err)
-			return
+			return err
 		}
 		items, err := r.plugin.ParseOutput(ctx, r.plugin.Command, strings.NewReader(strings.Join(out, "\n")))
 		if err != nil {
 			r.plugin.OnErr(err)
-			return
+			return err
 		}
 		r.plugin.Items = items
 	} else {
 		r.plugin.Refresh(ctx)
 	}
 	r.sendIPC(msgPluginRefreshComplete)
+	return nil
 }
 
 const (
-	msgPluginUnrecognised    = "unrecognised"
-	msgPluginRefreshComplete = "refresh-complete"
 	msgPluginRefreshAll      = "refresh-all"
+	msgPluginRefreshComplete = "refresh-complete"
+	msgPluginRefreshError    = "refresh-error"
+	msgPluginUnrecognised    = "unrecognised"
 	msgPluginQuit            = "quit"
+	msgPluginRestartme       = "restartme"
 )
 
 func newPluginRunner(bin string, ipcc *ipc.Client) *pluginRunner {
 	p := plugins.NewPlugin(bin)
 	r := &pluginRunner{
-		plugin:      p,
-		ipc:         ipcc,
-		items:       []*itemWrap{},
-		subitems:    map[*itemWrap][]*itemWrap{},
-		subsubitems: map[*itemWrap][]*itemWrap{},
-		log:         log.WithField("plugin", filepath.Base(bin)).WithField("pid", os.Getpid()),
+		plugin: p,
+		ipc:    ipcc,
+		items:  []*itemWrap{},
+		log:    log.WithField("plugin", filepath.Base(bin)).WithField("pid", os.Getpid()),
 	}
 	r.log.Infof("plugin runner initialised. full path: %s", bin)
 	return r
 }
 
 func (r *pluginRunner) Listen() {
+	r.log.Infof("listen for messages")
 	for {
-		r.log.Infof("listen for messages ")
 		m, err := r.ipc.Read()
 		if err != nil {
 			r.log.Errorf("IPC server error %s", err)
@@ -109,9 +114,15 @@ func (r *pluginRunner) Listen() {
 		}
 		r.log.WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Info("plugin runner received message")
 
+		if m.MsgType < 0 {
+			// diagnostical
+			continue
+		}
 		switch string(m.Data) {
 		case msgSupervisorRefresh:
+			r.lock.Lock()
 			r.refresh(context.Background(), false)
+			r.lock.Unlock()
 		case msgSupervisorUnrecognised:
 			// TODO die here?
 			r.log.WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Warnf("supervisor did not recognise previous command")
@@ -120,7 +131,7 @@ func (r *pluginRunner) Listen() {
 			systray.Quit()
 			r.log.Info("Finished quit request")
 		default:
-			r.log.WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Error("Received a message type which is not handled by this plugin")
+			r.log.WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Error("Plugin received a message type which it doesn't recognise")
 			r.sendIPC(msgPluginUnrecognised)
 		}
 	}
@@ -129,6 +140,8 @@ func (r *pluginRunner) Listen() {
 func (r *pluginRunner) init(ctx context.Context) func() {
 	r.log.Infof("launching systray icon")
 	return func() {
+		r.lock.Lock()
+		defer r.lock.Unlock()
 		r.log.Infof("command %s", r.plugin.Command)
 		r.refresh(ctx, true)
 		go func() {
@@ -141,10 +154,12 @@ func (r *pluginRunner) init(ctx context.Context) func() {
 func (r *pluginRunner) loop() {
 	if r.plugin.RefreshInterval.Duration() > 0 {
 		ctx := context.Background()
+		r.log.Infof("refresh every %v", r.plugin.RefreshInterval.Duration().String())
 		for {
-			r.log.Infof("refresh every %v", r.plugin.RefreshInterval.Duration().String())
 			time.Sleep(r.plugin.RefreshInterval.Duration())
+			r.lock.Lock()
 			r.refresh(ctx, false)
+			r.lock.Unlock()
 		}
 	} else {
 		// nothing to do. this plugin is static
@@ -167,10 +182,12 @@ func (r *pluginRunner) refreshAll(ctx context.Context, initial bool) {
 }
 
 func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
-	// TODO locking
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	r.refreshItems(ctx)
+	r.log.Debug("refresh items")
+	err := r.refreshItems(ctx)
+	if err != nil {
+		r.sendIPC(msgPluginRefreshError)
+	}
+	r.log.Debug("items refreshed")
 	title := r.plugin.Items.CycleItems[0].DisplayText()
 	systray.SetTitle(title)   // doesn't do anything on windows.
 	systray.SetTooltip(title) // not all platforms
@@ -184,7 +201,7 @@ func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 
 	if initial {
 		r.LunchbarMenu(title)
-	} else if runtime.GOOS == osWindows {
+	} else { // TODO decide about non-windows. should we set the title still?
 		r.mainItem.SetTitle(title)
 	}
 
@@ -205,7 +222,7 @@ func (r *pluginRunner) loadItem(index int, item *plugins.Item) {
 	var itemW *itemWrap
 	if item.Params.Separator {
 		if len(r.items) < index+1 {
-			itemW = &itemWrap{isSeparator: true, plugItem: item}
+			itemW = &itemWrap{isSeparator: true, plugItem: item, subitems: []*itemWrap{}}
 			itemW.trayItem = systray.AddMenuItem("----------", "separator")
 			r.items = append(r.items, itemW)
 			r.handleAction(itemW)
@@ -220,7 +237,7 @@ func (r *pluginRunner) loadItem(index int, item *plugins.Item) {
 		r.items = append(r.items, itemW)
 	} else {
 		if len(r.items) < index+1 {
-			itemW = &itemWrap{isSeparator: false, plugItem: item}
+			itemW = &itemWrap{isSeparator: false, plugItem: item, subitems: []*itemWrap{}}
 			itemW.trayItem = systray.AddMenuItem(item.DisplayText(), "tooltip")
 			r.items = append(r.items, itemW)
 			r.handleAction(itemW)
@@ -229,63 +246,71 @@ func (r *pluginRunner) loadItem(index int, item *plugins.Item) {
 			itemW.isSeparator = false
 			itemW.trayItem.SetTitle(item.DisplayText())
 			itemW.trayItem.Show()
-			itemW.trayItem.Enable()
 		}
 		if len(item.Items) > 0 {
-			subitemWs := r.subitems[itemW]
-			if subitemWs == nil {
-				subitemWs = []*itemWrap{}
-			}
+			itemW.trayItem.Enable()
 			for subindex, subitem := range item.Items {
-				r.loadSubitem(itemW, subitemWs, subindex, subitem)
+				r.loadSubitem(itemW, subindex, subitem)
 			}
-			r.subitems[itemW] = subitemWs
 
-			if len(item.Items) < len(subitemWs) {
-				for i := len(item.Items); i < len(subitemWs); i++ {
-					subitemWs[i].trayItem.Hide()
+			if len(item.Items) < len(itemW.subitems) {
+				for i := len(item.Items); i < len(itemW.subitems); i++ {
+					itemW.subitems[i].trayItem.Hide()
 				}
+			}
+		} else {
+			if itemW.plugItem.Action() != nil {
+				itemW.trayItem.Enable()
+			} else {
+				itemW.trayItem.Disable()
 			}
 		}
 	}
 }
 
-func (r *pluginRunner) loadSubitem(itemW *itemWrap, subitemWs []*itemWrap, subindex int, subitem *plugins.Item) {
+func (r *pluginRunner) loadSubitem(itemW *itemWrap, subindex int, subitem *plugins.Item) {
 	var subitemW *itemWrap
-	if len(subitemWs) < subindex+1 {
-		subitemW = &itemWrap{isSeparator: false, plugItem: subitem}
+	if len(itemW.subitems) == subindex { // need to add it
+		subitemW = &itemWrap{isSeparator: false, plugItem: subitem, subitems: []*itemWrap{}}
 		subitemW.trayItem = itemW.trayItem.AddSubMenuItem(subitem.DisplayText(), "tooltip")
-		subitemWs = append(subitemWs, subitemW)
+		itemW.subitems = append(itemW.subitems, subitemW)
 		r.handleAction(subitemW)
-	} else {
-		subitemW = subitemWs[subindex]
+	} else if len(itemW.subitems) > subindex {
+		subitemW = itemW.subitems[subindex]
 		subitemW.trayItem.SetTitle(subitem.DisplayText())
 		subitemW.trayItem.Show()
+	} else {
+		// error
+		r.log.WithFields(log.Fields{
+			"subindex":    subindex,
+			"displaytext": subitem.DisplayText(),
+			"len":         len(itemW.subitems),
+		}).Fatal("not enough subitems. Unexpected. Die")
 	}
 	if len(subitem.Items) > 0 {
-		subsubitemWs := r.subsubitems[subitemW]
-		if subsubitemWs == nil {
-			subsubitemWs = []*itemWrap{}
-		}
+		subitemW.trayItem.Enable()
 		for subsubindex, subsubitem := range subitem.Items {
 			var subsubitemW *itemWrap
-			if len(subsubitemWs) < subsubindex+1 {
-				subsubitemW = &itemWrap{isSeparator: false, plugItem: subsubitem}
+			if len(subitemW.subitems) < subsubindex+1 {
+				subsubitemW = &itemWrap{isSeparator: false, plugItem: subsubitem, subitems: []*itemWrap{}}
 				subsubitemW.trayItem = subitemW.trayItem.AddSubMenuItem(subsubitem.DisplayText(), "tooltip")
-				subsubitemWs = append(subsubitemWs, subsubitemW)
+				subitemW.subitems = append(subitemW.subitems, subsubitemW)
 				r.handleAction(subsubitemW)
 			} else {
-				subsubitemW = subsubitemWs[subsubindex]
+				subsubitemW = subitemW.subitems[subsubindex]
 				subsubitemW.trayItem.SetTitle(subsubitem.DisplayText())
 				subsubitemW.trayItem.Show()
 			}
 		}
-		r.subsubitems[subitemW] = subsubitemWs
-		if len(subitem.Items) < len(subsubitemWs) {
-			for i := len(subitem.Items); i < len(subsubitemWs); i++ {
-				subitemWs[i].trayItem.Hide()
+		if len(subitem.Items) < len(subitemW.subitems) {
+			for i := len(subitem.Items); i < len(subitemW.subitems); i++ {
+				itemW.subitems[i].trayItem.Hide()
 			}
 		}
+	} else if subitemW.plugItem.Action() != nil {
+		subitemW.trayItem.Enable()
+	} else {
+		subitemW.trayItem.Disable()
 	}
 }
 

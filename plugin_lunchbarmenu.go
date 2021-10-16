@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/apex/log"
 	"github.com/getlantern/systray"
@@ -11,10 +12,13 @@ import (
 )
 
 func (r *pluginRunner) LunchbarMenu(title string) {
-	r.mainItem = systray.AddMenuItem(title, "lunchbar functionality")
+	r.mainItem = systray.AddMenuItem(title, "Lunchbar menu")
 	systray.AddSeparator()
 
-	r.mainItem.AddSubMenuItem("lunchbar", "Lunchbar items")
+	titleItem := r.mainItem.AddSubMenuItem("Lunchbar menu", "Lunchbar menu items")
+	titleItem.Disable()
+	sep := r.mainItem.AddSubMenuItem("__________", "")
+	sep.Disable()
 
 	mRefresh := r.mainItem.AddSubMenuItem("Refresh", "Refresh script")
 	go func() {
@@ -25,6 +29,16 @@ func (r *pluginRunner) LunchbarMenu(title string) {
 		ctx := context.Background()
 		r.refresh(ctx, false)
 		r.log.Info("Finished refresh request")
+	}()
+
+	mRestart := r.mainItem.AddSubMenuItem("Restart plugin", "Restart plugin")
+	go func() {
+		<-mRestart.ClickedCh
+		r.log.Info("Requesting restart")
+		r.lock.Lock()
+		defer r.lock.Unlock()
+		r.sendIPC(msgPluginRestartme)
+		r.log.Info("Finished restart request")
 	}()
 
 	mRefreshAll := r.mainItem.AddSubMenuItem("Refresh All", "Refresh all ids")
@@ -38,9 +52,9 @@ func (r *pluginRunner) LunchbarMenu(title string) {
 		r.log.Info("Finished refresh-all request")
 	}()
 	// TODO - what to do if EDITOR not set. VISUAL? Look for a default program? TextEdit/notepad/etc?
-	editor := os.Getenv("EDITOR")
+	editor := os.Getenv("VISUAL")
 	if editor == "" {
-		log.Warn("EDITOR not set")
+		log.Warn("VISUAL not set")
 	} else {
 		mOpen := r.mainItem.AddSubMenuItem("Edit plugin script", "edit script")
 		go func() {
@@ -50,13 +64,13 @@ func (r *pluginRunner) LunchbarMenu(title string) {
 			defer r.lock.Unlock()
 			ctx := context.Background()
 
-			// for now ... use EDITOR?
+			// for now ... use VISUAL?
 			log.Infof("running %s", editor)
 			item := &plugins.Item{
 				Params: plugins.ItemParams{
 					Shell:       editor,
 					ShellParams: []string{r.plugin.Command},
-					Terminal:    true,
+					Terminal:    false,
 				},
 				Plugin: r.plugin,
 			}
@@ -85,9 +99,11 @@ func (r *pluginRunner) LunchbarMenu(title string) {
 		r.log.Info("Finished open dir request")
 	}()
 
-	mQuit := r.mainItem.AddSubMenuItem("Quit", "Quit lunchbar")
+	mQuit := r.mainItem.AddSubMenuItem("Quit Lunchbar", "Quit lunchbar")
 	go func() {
 		<-mQuit.ClickedCh
 		r.sendIPC(msgPluginQuit)
+		time.Sleep(time.Second)
+		os.Exit(0)
 	}()
 }

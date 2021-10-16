@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"sync"
 	"time"
@@ -19,15 +20,17 @@ const (
 )
 
 type supervisor struct {
-	lock sync.Mutex
-	ipcs map[string]*ipc.Server
-	log  *log.Entry
+	lock      sync.Mutex
+	ipcs      map[string]*ipc.Server
+	log       *log.Entry
+	processes []*exec.Cmd
 }
 
 func newSupervisor() *supervisor {
 	s := &supervisor{
-		ipcs: map[string]*ipc.Server{},
-		log:  log.WithField("t", "supervisor").WithField("pid", os.Getpid()),
+		ipcs:      map[string]*ipc.Server{},
+		log:       log.WithField("t", "supervisor").WithField("pid", os.Getpid()),
+		processes: []*exec.Cmd{},
 	}
 	return s
 }
@@ -38,15 +41,19 @@ const (
 	msgSupervisorQuit         = "quit"
 )
 
-func (s *supervisor) Listen(key string, ipcs *ipc.Server) {
+func (s *supervisor) Listen(ctx context.Context, key string, ipcs *ipc.Server) {
+	s.log.WithField("plugin", key).Infof("listen for messages")
 	for {
-		s.log.WithField("plugin", key).Infof("listen for messages")
 		m, err := ipcs.Read()
 		if err != nil {
 			s.log.Errorf("IPC server error %s", err)
 			break
 		}
-		s.log.WithField("plugin", key).WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Info("supervisor received message")
+		s.log.WithField("from-plugin", key).WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Info("supervisor received message")
+		if m.MsgType < 0 {
+			// -2 is error. -1 seems to mean 'ok'
+			continue
+		}
 		switch string(m.Data) {
 		case msgPluginRefreshAll:
 			// TODO discovering new plugins
@@ -54,17 +61,29 @@ func (s *supervisor) Listen(key string, ipcs *ipc.Server) {
 			s.broadcast(msgSupervisorRefresh)
 		case msgPluginRefreshComplete:
 			// nothing to do
+		case msgPluginRefreshError:
+			// TODO - kill and relaunch, maybe? after a time...
 		case msgPluginUnrecognised:
 			// TODO - die here? / kill plugin?
-			s.log.WithField("plugin", key).WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Warn("plugin did not recognise previous command")
+			s.log.WithField("from-plugin", key).WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Warn("plugin did not recognise previous command")
+		case msgPluginRestartme:
+			s.log.Info("send quit request to restartme plugin")
+			s.sendIPC(key, msgSupervisorQuit)
+			// TODO timing. should we wait for plugins to respond?
+			time.Sleep(time.Second * 1)
+			p := filepath.Join(pluginsDir(), key)
+			plugin := plugins.NewPlugin(p)
+			s.startPlugin(ctx, plugin)
+
 		case msgPluginQuit:
 			s.log.Info("broadcasting quit request to all plugins")
 			s.broadcast(msgSupervisorQuit)
+			// TODO timing. should we wait for plugins to respond?
+			time.Sleep(time.Second * 2)
 			s.log.Info("exiting now")
-			// TODO timing. should we wait for plugins to tidy up anything?
 			os.Exit(0)
 		default:
-			s.log.WithField("plugin", key).WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Error("supervisor received a message which is not handled")
+			s.log.WithField("from-plugin", key).WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Error("supervisor received a message which is not handled")
 			s.sendIPC(msgSupervisorUnrecognised, key)
 		}
 	}
@@ -88,11 +107,19 @@ func (s *supervisor) Start() {
 	if err := os.MkdirAll(pluginsDir(), 0777); err != nil {
 		s.log.Warnf("failed to create plugin directory: %s", err)
 	}
-	s.StartAll()
-	time.Sleep(time.Hour * 24) // TODO refresh plugins list indefinitely instead
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	s.StartAll(ctx)
+
+	log.Info("main thread awaiting cancellation")
+	<-ctx.Done()
+	// TODO should we do any more tidy up?
+	log.Info("exit after signal context cancelled")
 }
 
-func (s *supervisor) StartAll() {
+func (s *supervisor) StartAll(ctx context.Context) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -100,36 +127,39 @@ func (s *supervisor) StartAll() {
 	if err != nil {
 		s.log.Warnf("Error loading plugins: %s", err)
 	}
+	for _, plugin := range pls {
+		s.startPlugin(ctx, plugin)
+	}
+}
+
+func (s *supervisor) startPlugin(ctx context.Context, plugin *plugins.Plugin) {
 	thisExecutable, err := os.Executable()
 	if err != nil {
-		s.log.Warnf("Error getting current exe")
+		s.log.Errorf("Error getting current exe")
 		return
 	}
 
-	for _, plugin := range pls {
-		ctx := context.Background()
-		key := filepath.Base(plugin.Command)
-		s.log.Infof("starting %s %s", thisExecutable, key)
-		sc, err := ipc.StartServer("lunchbar_"+key, nil)
+	key := filepath.Base(plugin.Command)
+	s.log.Infof("starting %s %s", thisExecutable, key)
+	sc, err := ipc.StartServer("lunchbar_"+key, nil)
+	if err != nil {
+		log.Errorf("could not start IPC server: %s", err)
+		return
+	}
+	s.ipcs[key] = sc
+	go s.Listen(ctx, key, sc)
+	go func(plugin *plugins.Plugin) {
+		cmd := exec.CommandContext(ctx, thisExecutable, "plugin", "-plugin", key)
+		plugins.Setpgid(cmd) // sets process group id (Unix only). This ensures that the child processes get tidied up
+		cmd.Dir = pluginsDir()
+		cmd.Stderr = os.Stdout
+		s.processes = append(s.processes, cmd)
+		// TODO use Start instead?
+		cmd.Start()
+		err := cmd.Run()
 		if err != nil {
-			log.Errorf("could not start IPC server: %s", err)
+			s.log.WithField("plugin", filepath.Base(plugin.Command)).Errorf("error running %s: %s", thisExecutable, err)
 			return
 		}
-		s.ipcs[key] = sc
-		go s.Listen(key, sc)
-		go func(plugin *plugins.Plugin) {
-			cmd := exec.CommandContext(ctx, thisExecutable, "plugin", "-plugin", key)
-			cmd.Dir = pluginsDir()
-			cmd.Stderr = os.Stdout
-			err := cmd.Run()
-			if err != nil {
-				s.log.WithField("plugin", filepath.Base(plugin.Command)).Errorf("error running %s: %s", thisExecutable, err)
-				return
-			}
-			err = sc.Write(msgcodeDefault, []byte("hello client. I refreshed"))
-			if err != nil {
-				s.log.Warnf("could not write to client %s", err)
-			}
-		}(plugin)
-	}
+	}(plugin)
 }
