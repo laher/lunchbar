@@ -49,7 +49,7 @@ func (s *supervisor) Listen(ctx context.Context, key string, ipcs *ipc.Server) {
 			s.log.Errorf("IPC server error %s", err)
 			break
 		}
-		s.log.WithField("from-plugin", key).WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Info("supervisor received message")
+		s.log.WithField("from-plugin", key).WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Debug("supervisor received message")
 		if m.MsgType < 0 {
 			// -2 is error. -1 seems to mean 'ok'
 			continue
@@ -67,7 +67,7 @@ func (s *supervisor) Listen(ctx context.Context, key string, ipcs *ipc.Server) {
 			// TODO - die here? / kill plugin?
 			s.log.WithField("from-plugin", key).WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Warn("plugin did not recognise previous command")
 		case msgPluginRestartme:
-			s.log.Info("send quit request to restartme plugin")
+			s.log.Info("send quit request to plugin which requested restart")
 			s.sendIPC(key, msgSupervisorQuit)
 			// TODO timing. should we wait for plugins to respond?
 			time.Sleep(time.Second * 1)
@@ -113,7 +113,7 @@ func (s *supervisor) Start() {
 
 	s.StartAll(ctx)
 
-	log.Info("main thread awaiting cancellation")
+	log.Info("main thread running until cancellation of interrupt context")
 	<-ctx.Done()
 	// TODO should we do any more tidy up?
 	log.Info("exit after signal context cancelled")
@@ -140,7 +140,7 @@ func (s *supervisor) startPlugin(ctx context.Context, plugin *plugins.Plugin) {
 	}
 
 	key := filepath.Base(plugin.Command)
-	s.log.Infof("starting %s %s", thisExecutable, key)
+  s.log.Infof("starting plugin %s: %s", key, thisExecutable)
 	sc, err := ipc.StartServer("lunchbar_"+key, nil)
 	if err != nil {
 		log.Errorf("could not start IPC server: %s", err)

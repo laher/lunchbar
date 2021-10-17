@@ -29,14 +29,14 @@ func (r *pluginRunner) LunchbarMenu(title string) {
 	mRestart := r.mainItem.AddSubMenuItem("Restart plugin", "Restart plugin")
 	go func() {
 		<-mRestart.ClickedCh
-		r.log.Info("Requesting restart")
+		r.log.Info("Requesting plugin restart")
 		r.lock.Lock()
 		defer r.lock.Unlock()
 		r.sendIPC(msgPluginRestartme)
 		r.log.Info("Finished restart request")
 	}()
 
-	mRefreshAll := r.mainItem.AddSubMenuItem("Refresh All", "Refresh all ids")
+	mRefreshAll := r.mainItem.AddSubMenuItem("Refresh All", "Refresh all plugins")
 	go func() {
 		<-mRefreshAll.ClickedCh
 		r.log.Info("Requesting refresh-all")

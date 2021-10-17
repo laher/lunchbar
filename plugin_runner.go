@@ -112,7 +112,7 @@ func (r *pluginRunner) Listen() {
 			r.log.Errorf("IPC server error %s", err)
 			break
 		}
-		r.log.WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Info("plugin runner received message")
+		r.log.WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Debug("plugin runner received message")
 
 		if m.MsgType < 0 {
 			// diagnostical
@@ -138,11 +138,11 @@ func (r *pluginRunner) Listen() {
 }
 
 func (r *pluginRunner) init(ctx context.Context) func() {
-	r.log.Infof("launching systray icon")
+	r.log.Debug("launching systray icon")
 	return func() {
 		r.lock.Lock()
 		defer r.lock.Unlock()
-		r.log.Infof("command %s", r.plugin.Command)
+		r.log.Debugf("initialise plugin with command %s", r.plugin.Command)
 		r.refresh(ctx, true)
 		go func() {
 			time.Sleep(5 * time.Second)
@@ -216,6 +216,7 @@ func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 		r.mainItem.SetTitle(lunchbarTitle)
 	}
 
+	// override the default logger
 	r.plugin.Debugf = r.log.Infof
 	r.plugin.AppleScriptTemplate = appleScriptDefaultTemplate
 	r.log.Infof("found %d items", len(r.plugin.Items.ExpandedItems))
@@ -233,10 +234,8 @@ func (r *pluginRunner) loadItem(index int, item *plugins.Item) {
 	var itemW *itemWrap
 	var title = ""
 	if item.Params.Separator {
-		r.log.Info("separator")
 		title = "----------"
 	} else {
-		r.log.Info("non-separator")
 		title = item.DisplayText()
 	}
 	if len(r.items) < index+1 {
