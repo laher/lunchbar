@@ -8,6 +8,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/getlantern/systray"
+	xbarplugins "github.com/laher/lunchbox/xbar-plugins"
 	"github.com/matryer/xbar/pkg/plugins"
 )
 
@@ -93,6 +94,16 @@ func (r *pluginRunner) LunchbarMenu(title string) {
 		af(ctx)
 		r.log.Info("Finished open dir request")
 	}()
+
+	pis, err := xbarplugins.List(context.TODO())
+	if err != nil {
+
+	} else {
+		mAddPlugin := r.mainItem.AddSubMenuItem("Add a plugin", "add a plugin")
+		for _, pi := range pis {
+			mAddPlugin.AddSubMenuItem(pi, pi)
+		}
+	}
 
 	mQuit := r.mainItem.AddSubMenuItem("Quit Lunchbar", "Quit lunchbar")
 	go func() {

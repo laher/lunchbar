@@ -183,7 +183,7 @@ func (r *pluginRunner) refreshAll(ctx context.Context, initial bool) {
 
 // TODO allow icon configuration (via dotenv?)
 func (r *pluginRunner) iconOnly() bool {
-	return runtime.GOOS == osWindows
+	return runtime.GOOS == osWindows || os.Getenv("LUNCHBAR_ICON_ONLY") == "1"
 }
 
 func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
@@ -194,20 +194,38 @@ func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 	}
 	r.log.Debug("items refreshed")
 	title := r.plugin.Items.CycleItems[0].DisplayText()
-	systray.SetTitle(title)   // doesn't do anything on windows.
 	systray.SetTooltip(title) // not all platforms
 
 	lunchbarTitle := "Lunchbar"
 	if r.iconOnly() {
 		// necessary for windows - set icon ...
 		// it's a bit ugly right now so just leave it for other platforms for now ...
-		ic, err := getTextIcon(strings.TrimSpace(title)[:1])
-		if err == nil {
-			if runtime.GOOS != osWindows || initial { // <- Windows seems to have problems with settings anything after icon
-				systray.SetIcon(ic)
+		r.log.Infof("found %d names\n", len(getNames()))
+		lowered := strings.ToLower(strings.TrimSpace(title))
+		firstChar := string([]rune(lowered)[0])
+		b, err := GetIconForChar(firstChar)
+		if err != nil {
+			r.log.Warnf("couldnt find image for '%s': %v", firstChar, err)
+			// oops
+		} else {
+			ic, err := getEmojicon(b)
+			if err != nil {
+
+				r.log.Warnf("couldnt load emojicon: %v", err)
+				ic, err = getTextIcon(firstChar)
+				if err != nil {
+					r.log.Warnf("couldnt load text icon: %v", err)
+				}
+			}
+			if ic != nil {
+				if runtime.GOOS != osWindows || initial { // <- Windows seems to have problems with settings anything after icon
+					systray.SetIcon(ic)
+				}
 			}
 		}
 		lunchbarTitle = title
+	} else {
+		systray.SetTitle(title) // doesn't do anything on windows.
 	}
 
 	if initial {
@@ -339,7 +357,7 @@ const appleScriptDefaultTemplate = `
 		{{ else }}
 			set commandLine to {{ .Vars }} & " " & quotedScriptName
 		{{ end }}
-			if application "Terminal" is running then 
+			if application "Terminal" is running then
 				tell application "Terminal"
 					do script commandLine
 					activate
