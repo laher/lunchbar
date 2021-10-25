@@ -47,14 +47,22 @@ What are the similarities and differences between xbar and lunchbar?
 
 ## Installation
 
-For now, it's not pre-packaged. Please install lunchbar using the Go compiler.
+For now, it's not pre-packaged.
 
- 1. Check getlantern/systray's docs for installing pre-requisites.
- 2. Install lunchbar
+Please install lunchbar using the Go compiler.
+
+ 1. Check [getlantern/systray](https://github.com/getlantern/systray)'s docs for installing pre-requisites.
+    i.e. on Linux, install something like this: `sudo apt-get install gcc libgtk-3-dev libappindicator3-dev`
+
+ 2. Windows ONLY (or any Linux variant which doesn't support text in systray menu items):
+      * users should fetch emoji to support icons ... https://github.com/WebpageFX/emoji-cheat-sheet.com
+      * copy the png files directly into emoji/ subdirectory of lunchbar. These will get bundled into lunchbar during compilation step.
+
+ 2. Install lunchbar using Go (tested on 1.17):
 
     go install github.com/laher/lunchbar@latest
 
- 3. Run lunchbar
+ 3. Run lunchbar (assuming that your $GOPATH/bin is on your $PATH)
 
     lunchbar
 
@@ -86,7 +94,7 @@ Focus of M1 is to get something usable working across OSes ...
  - [ ] Error handling
    - [ ] Show a sample when no plugins found
    - [ ] React to killed process
- - [ ] Testing 
+ - [ ] Testing
    - [ ] Happy Path Tests
    - [ ] Error path tests
 
@@ -97,7 +105,7 @@ M2 is to add some convenience features ahead of plugin management
  - [ ] Build automation (go-releaser cross compilation?)!
  - [ ] .env files
      - [ ] encrypted keys
- - [ ] Plugin-writing help 
+ - [ ] Plugin-writing help
    - [ ] Bundled-elvish support
    - [ ] Cross-platform convenience methods
    - [ ] Guides
