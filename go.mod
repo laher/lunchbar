@@ -8,11 +8,9 @@ require (
 	github.com/getlantern/systray v1.1.0
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 	github.com/james-barrow/golang-ipc v0.0.0-20210227130457-95e7cc81f5e2
-	github.com/joho/godotenv v1.4.0
-	github.com/laher/lunchbox v0.0.0-20211016094023-b7b9fc4c1cf3
+	github.com/laher/lunchbox v0.0.0-20211025093238-8ed744b97010
 	github.com/matryer/xbar/pkg/plugins v0.0.0-20210918110050-1410be750e94
 	golang.org/x/image v0.0.0-20210628002857-a66eb6448b8d
-	src.elv.sh v0.16.3
 )
 
 require (
@@ -29,6 +27,7 @@ require (
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/itchyny/gojq v0.12.5 // indirect
 	github.com/itchyny/timefmt-go v0.1.3 // indirect
+	github.com/joho/godotenv v1.4.0 // indirect
 	github.com/leaanthony/go-ansi-parser v1.2.0 // indirect
 	github.com/lestrrat-go/strftime v1.0.5 // indirect
 	github.com/logrusorgru/aurora v2.0.3+incompatible // indirect
@@ -46,6 +45,7 @@ require (
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
 	golang.org/x/sys v0.0.0-20211015200801-69063c4bb744 // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
+	src.elv.sh v0.16.3 // indirect
 )
 
 exclude github.com/matryer/xbar/pkg/metadata v0.0.0-00010101000000-000000000000
@@ -56,4 +56,4 @@ replace github.com/matryer/xbar/pkg/plugins => github.com/laher/xbar/pkg/plugins
 
 replace github.com/matryer/xbar/pkg/metadata => github.com/laher/xbar/pkg/metadata v0.0.0-20210927175547-f69614fb2e13
 
-replace github.com/laher/lunchbox => ../lunchbox
+//replace github.com/laher/lunchbox => ../lunchbox
