@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"net"
@@ -24,7 +23,7 @@ const (
 type IPCMessage struct {
 	Length int
 	Type   string
-	Data   []byte
+	Data   string
 }
 
 func (e *IPCMessage) String() string {
@@ -42,12 +41,12 @@ func (e *IPCMessage) Write(c net.Conn) error {
 
 	data = append(data, []byte(e.Type)...)
 
-	w := bytes.Buffer{}
+	/* w := bytes.Buffer{}
 	if err := binary.Write(&w, binary.BigEndian, e.Data); err != nil {
 		return err
 	}
-
-	data = append(data, w.Bytes()...)
+	*/
+	data = append(data, []byte(e.Data)...)
 	if _, err := c.Write(data); err != nil {
 		return err
 	}
@@ -69,11 +68,12 @@ func (e *IPCMessage) Read(c net.Conn) error {
 	}
 	e.Type = string(buf)
 
-	e.Data = make([]byte, e.Length)
+	data := make([]byte, e.Length)
 
-	if _, err := c.Read(e.Data); err != nil {
+	if _, err := c.Read(data); err != nil {
 		return err
 	}
+	e.Data = string(data)
 
 	return nil
 }

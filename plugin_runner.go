@@ -39,6 +39,7 @@ func runPlugin(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	go r.Listen()
 	systray.Run(r.init(ctx), r.onExit)
 	return nil
 }
@@ -101,7 +102,7 @@ func newPluginRunner(bin string) (*pluginRunner, error) {
 
 func (r *pluginRunner) Listen() {
 	r.log.Infof("listen for messages")
-	start := &IPCMessage{Type: msgPluginID, Data: []byte(filepath.Base(r.plugin.Command))}
+	start := &IPCMessage{Type: msgPluginID, Data: filepath.Base(r.plugin.Command)}
 	start.Write(r.conn)
 	for {
 		m := &IPCMessage{}

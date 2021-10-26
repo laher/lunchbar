@@ -88,6 +88,7 @@ func (s *supervisor) handleConnection(ctx context.Context, conn net.Conn) {
 
 		log.Infof("[READ] message: %+v", m)
 		if m.Type == msgPluginID {
+			log.Infof("plugin connected with ID: %s", string(m.Data))
 			key = string(m.Data)
 			s.lock.Lock()
 			s.connections[key] = conn
@@ -149,22 +150,31 @@ func (s *supervisor) handleMessage(ctx context.Context, key string, m *IPCMessag
 
 func (s *supervisor) broadcast(m *IPCMessage) {
 	s.lock.RLock()
-	defer s.lock.RUnlock()
+	keys := []string{}
 	for k := range s.connections {
+		keys = append(keys, k)
+	}
+	s.lock.RUnlock()
+	for _, k := range keys {
 		s.sendIPC(k, m)
 	}
 }
 
-func (s *supervisor) sendIPC(k string, m *IPCMessage) {
+func (s *supervisor) sendIPC(k string, m *IPCMessage) error {
 	s.lock.RLock()
 	c, ok := s.connections[k]
 	s.lock.RUnlock()
 	if ok {
+		s.log.Infof("Sending quit message to plugin: %s", k)
 		if err := m.Write(c); err != nil {
 			// TODO tidyup?
 			s.log.Warnf("could not write to client: %s", err)
+			return err
 		}
+	} else {
+		s.log.Warnf("could not find a connection for plugin: %s", k)
 	}
+	return nil
 }
 
 func (s *supervisor) Start() {
