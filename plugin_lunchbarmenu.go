@@ -33,7 +33,7 @@ func (r *pluginRunner) LunchbarMenu(title string) {
 		r.log.Info("Requesting plugin restart")
 		r.lock.Lock()
 		defer r.lock.Unlock()
-		r.sendIPC(msgPluginRestartme)
+		r.sendIPC(&IPCMessage{Type: msgPluginRestartme})
 		r.log.Info("Finished restart request")
 	}()
 
@@ -108,7 +108,7 @@ func (r *pluginRunner) LunchbarMenu(title string) {
 	mQuit := r.mainItem.AddSubMenuItem("Quit Lunchbar", "Quit lunchbar")
 	go func() {
 		<-mQuit.ClickedCh
-		r.sendIPC(msgPluginQuit)
+		r.sendIPC(&IPCMessage{Type: msgPluginQuit})
 		time.Sleep(time.Second)
 		os.Exit(0)
 	}()

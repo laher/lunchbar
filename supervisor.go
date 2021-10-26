@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"io"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -10,7 +12,6 @@ import (
 	"time"
 
 	"github.com/apex/log"
-	ipc "github.com/james-barrow/golang-ipc"
 
 	"github.com/matryer/xbar/pkg/plugins"
 )
@@ -20,85 +21,149 @@ const (
 )
 
 type supervisor struct {
-	lock      sync.Mutex
-	ipcs      map[string]*ipc.Server
+	lock        sync.RWMutex
+	listener    net.Listener
+	connections map[string]net.Conn
+	//ipcs        map[string]*ipc.Server
 	log       *log.Entry
 	processes []*exec.Cmd
 }
 
 func newSupervisor() *supervisor {
 	s := &supervisor{
-		ipcs:      map[string]*ipc.Server{},
+		connections: map[string]net.Conn{},
+		//ipcs:      map[string]*ipc.Server{},
 		log:       log.WithField("t", "supervisor").WithField("pid", os.Getpid()),
 		processes: []*exec.Cmd{},
 	}
 	return s
 }
 
-const (
-	msgSupervisorRefresh      = "refresh"
-	msgSupervisorUnrecognised = "unrecognised"
-	msgSupervisorQuit         = "quit"
-)
-
-func (s *supervisor) Listen(ctx context.Context, key string, ipcs *ipc.Server) {
-	s.log.WithField("plugin", key).Infof("listen for messages")
-	for {
-		m, err := ipcs.Read()
-		if err != nil {
-			s.log.Errorf("IPC server error %s", err)
-			break
-		}
-		s.log.WithField("from-plugin", key).WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Debug("supervisor received message")
-		if m.MsgType < 0 {
-			// -2 is error. -1 seems to mean 'ok'
-			continue
-		}
-		switch string(m.Data) {
-		case msgPluginRefreshAll:
-			// TODO discovering new plugins
-			// TODO killing old plugins
-			s.broadcast(msgSupervisorRefresh)
-		case msgPluginRefreshComplete:
-			// nothing to do
-		case msgPluginRefreshError:
-			// TODO - kill and relaunch, maybe? after a time...
-		case msgPluginUnrecognised:
-			// TODO - die here? / kill plugin?
-			s.log.WithField("from-plugin", key).WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Warn("plugin did not recognise previous command")
-		case msgPluginRestartme:
-			s.log.Info("send quit request to plugin which requested restart")
-			s.sendIPC(key, msgSupervisorQuit)
-			// TODO timing. should we wait for plugins to respond?
-			time.Sleep(time.Second * 1)
-			p := filepath.Join(pluginsDir(), key)
-			plugin := plugins.NewPlugin(p)
-			s.startPlugin(ctx, plugin)
-
-		case msgPluginQuit:
-			s.log.Info("broadcasting quit request to all plugins")
-			s.broadcast(msgSupervisorQuit)
-			// TODO timing. should we wait for plugins to respond?
-			time.Sleep(time.Second * 2)
-			s.log.Info("exiting now")
-			os.Exit(0)
-		default:
-			s.log.WithField("from-plugin", key).WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Error("supervisor received a message which is not handled")
-			s.sendIPC(msgSupervisorUnrecognised, key)
-		}
-	}
+func sockAddr() string {
+	return filepath.Join(os.TempDir(), "lunchbar.sock")
+	//return filepath.Join(os.Getenv("TEMP"), "lunchbar")
 }
 
-func (s *supervisor) broadcast(m string) {
-	for k := range s.ipcs {
-		s.sendIPC(m, k)
+func (s *supervisor) listenForConnections() error {
+	s.log.Info("remove all")
+	if err := os.RemoveAll(sockAddr()); err != nil {
+		s.log.WithError(err).Error("could not remove all")
+		return err
 	}
-}
-
-func (s *supervisor) sendIPC(m, key string) {
-	err := s.ipcs[key].Write(msgcodeDefault, []byte(m))
+	var err error
+	s.listener, err = net.Listen("unix", sockAddr())
 	if err != nil {
-		s.log.Warnf("could not write to client: %s", err)
+		return err
+	}
+	go func() {
+		defer s.listener.Close()
+		for {
+			// Accept new connections, dispatching them to echoServer
+			// in a goroutine.
+			conn, err := s.listener.Accept()
+			if err != nil {
+				log.Errorf("accept error:", err)
+				os.Exit(1)
+			}
+			go s.handleConnection(context.Background(), conn)
+		}
+	}()
+	return nil
+}
+
+func (s *supervisor) handleConnection(ctx context.Context, conn net.Conn) {
+	key := "" // no key yet
+	for {
+		m := &IPCMessage{}
+		err := m.Read(conn)
+		if err != nil {
+			if err == io.EOF {
+				// TODO - restart?
+				log.Infof("client closed connection")
+				return
+			}
+			log.Errorf("error %s", err)
+			return
+		}
+
+		log.Infof("[READ] message: %+v", m)
+		if m.Type == msgPluginID {
+			key = string(m.Data)
+			s.lock.Lock()
+			s.connections[key] = conn
+			s.lock.Unlock()
+		} else {
+			/*
+				s := strings.ToUpper(string(m.Data))
+				m.Length = len(s)
+				m.Data = []byte(s)
+
+				err = m.Write(conn)
+				if err != nil {
+					log.Errorf("Error writing %s", err)
+					break
+				}
+
+				fmt.Println("[WRITE] ", m)
+			*/
+			s.handleMessage(ctx, key, m)
+		}
+	}
+}
+
+func (s *supervisor) handleMessage(ctx context.Context, key string, m *IPCMessage) {
+	s.log.WithField("from-plugin", key).WithField("messageType", m.Type).WithField("body", string(m.Data)).Debug("supervisor received message")
+	switch m.Type {
+	case msgPluginRefreshAll:
+		// TODO discovering new plugins
+		// TODO killing old plugins
+		s.broadcast(&IPCMessage{Type: msgSupervisorRefresh})
+	case msgPluginRefreshComplete:
+		// nothing to do
+	case msgPluginRefreshError:
+		// TODO - kill and relaunch, maybe? after a time...
+	case msgPluginUnrecognised:
+		// TODO - die here? / kill plugin?
+		s.log.WithField("from-plugin", key).WithField("messageType", m.Type).WithField("body", string(m.Data)).Warn("plugin did not recognise previous command")
+	case msgPluginRestartme:
+		s.log.Info("send quit request to plugin which requested restart")
+		s.sendIPC(key, &IPCMessage{Type: msgSupervisorQuit})
+		// TODO timing. should we wait for plugins to respond?
+		time.Sleep(time.Second * 1)
+		p := filepath.Join(pluginsDir(), key)
+		plugin := plugins.NewPlugin(p)
+		s.startPlugin(ctx, plugin)
+
+	case msgPluginQuit:
+		s.log.Info("broadcasting quit request to all plugins")
+		s.broadcast(&IPCMessage{Type: msgSupervisorQuit})
+		// TODO timing. should we wait for plugins to respond?
+		time.Sleep(time.Second * 2)
+		s.log.Info("exiting now")
+		os.Exit(0)
+	default:
+		s.log.WithField("from-plugin", key).WithField("messageType", m.Type).WithField("body", string(m.Data)).Error("supervisor received a message which is not handled")
+		s.sendIPC(key, &IPCMessage{Type: msgSupervisorUnrecognised})
+	}
+}
+
+func (s *supervisor) broadcast(m *IPCMessage) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	for k := range s.connections {
+		s.sendIPC(k, m)
+	}
+}
+
+func (s *supervisor) sendIPC(k string, m *IPCMessage) {
+	s.lock.RLock()
+	c, ok := s.connections[k]
+	s.lock.RUnlock()
+	if ok {
+		if err := m.Write(c); err != nil {
+			// TODO tidyup?
+			s.log.Warnf("could not write to client: %s", err)
+		}
 	}
 }
 
@@ -111,6 +176,13 @@ func (s *supervisor) Start() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
+	go func() {
+		err := s.listenForConnections()
+		if err != nil {
+			s.log.WithError(err).Errorf("could not listen for connections %s", sockAddr())
+			os.Exit(1)
+		}
+	}()
 	s.StartAll(ctx)
 
 	log.Info("main thread running until cancellation of interrupt context")
@@ -138,16 +210,9 @@ func (s *supervisor) startPlugin(ctx context.Context, plugin *plugins.Plugin) {
 		s.log.Errorf("Error getting current exe")
 		return
 	}
-
 	key := filepath.Base(plugin.Command)
-  s.log.Infof("starting plugin %s: %s", key, thisExecutable)
-	sc, err := ipc.StartServer("lunchbar_"+key, nil)
-	if err != nil {
-		log.Errorf("could not start IPC server: %s", err)
-		return
-	}
-	s.ipcs[key] = sc
-	go s.Listen(ctx, key, sc)
+	s.log.Infof("starting plugin %s: %s", key, thisExecutable)
+	//go s.Listen(ctx, key) // restart ?
 	go func(plugin *plugins.Plugin) {
 		cmd := exec.CommandContext(ctx, thisExecutable, "plugin", "-plugin", key)
 		plugins.Setpgid(cmd) // sets process group id (Unix only). This ensures that the child processes get tidied up
@@ -155,7 +220,6 @@ func (s *supervisor) startPlugin(ctx context.Context, plugin *plugins.Plugin) {
 		cmd.Stderr = os.Stdout
 		s.processes = append(s.processes, cmd)
 		// TODO use Start instead?
-		cmd.Start()
 		err := cmd.Run()
 		if err != nil {
 			s.log.WithField("plugin", filepath.Base(plugin.Command)).Errorf("error running %s: %s", thisExecutable, err)

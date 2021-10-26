@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/apex/log"
 	"github.com/getlantern/systray"
-	ipc "github.com/james-barrow/golang-ipc"
 	"github.com/laher/lunchbox/lunch"
 	"github.com/matryer/xbar/pkg/plugins"
 )
@@ -31,26 +31,23 @@ func runPlugin(ctx context.Context, args []string) error {
 	}
 	// TODO should we do dotenv?
 	// godotenv.Load(filepath.Base(*pluginPtr) + ".env")
-	key := "lunchbar_" + filepath.Base(*pluginPtr)
-	sc, err := ipc.StartClient(key, nil)
-	if err != nil {
-		log.Errorf("could not start IPC client: %s", err)
-		return err
-	}
 	bin := *pluginPtr
 	if !strings.Contains(*pluginPtr, "/") {
 		bin = filepath.Join(pluginsDir(), *pluginPtr)
 	}
-	r := newPluginRunner(bin, sc)
-	go r.Listen()
+	r, err := newPluginRunner(bin)
+	if err != nil {
+		return err
+	}
 	systray.Run(r.init(ctx), r.onExit)
 	return nil
 }
 
 type pluginRunner struct {
-	plugin   *plugins.Plugin
-	lock     sync.Mutex
-	ipc      *ipc.Client
+	plugin *plugins.Plugin
+	lock   sync.Mutex
+	//ipc      *ipc.Client
+	conn     net.Conn
 	mainItem *systray.MenuItem
 	items    []*itemWrap
 	log      *log.Entry
@@ -79,60 +76,56 @@ func (r *pluginRunner) refreshItems(ctx context.Context) error {
 	} else {
 		r.plugin.Refresh(ctx)
 	}
-	r.sendIPC(msgPluginRefreshComplete)
+	// TODO do we need this ever?
+	//r.sendIPC(&IPCMessage{Type: msgPluginRestartme})
 	return nil
 }
 
-const (
-	msgPluginRefreshAll      = "refresh-all"
-	msgPluginRefreshComplete = "refresh-complete"
-	msgPluginRefreshError    = "refresh-error"
-	msgPluginUnrecognised    = "unrecognised"
-	msgPluginQuit            = "quit"
-	msgPluginRestartme       = "restartme"
-)
-
-func newPluginRunner(bin string, ipcc *ipc.Client) *pluginRunner {
+func newPluginRunner(bin string) (*pluginRunner, error) {
 	p := plugins.NewPlugin(bin)
+
+	conn, err := net.Dial("unix", sockAddr())
+	if err != nil {
+		return nil, err
+	}
+	//defer conn.Close()
 	r := &pluginRunner{
 		plugin: p,
-		ipc:    ipcc,
+		conn:   conn,
 		items:  []*itemWrap{},
 		log:    log.WithField("plugin", filepath.Base(bin)).WithField("pid", os.Getpid()),
 	}
 	r.log.Infof("plugin runner initialised. full path: %s", bin)
-	return r
+	return r, nil
 }
 
 func (r *pluginRunner) Listen() {
 	r.log.Infof("listen for messages")
+	start := &IPCMessage{Type: msgPluginID, Data: []byte(filepath.Base(r.plugin.Command))}
+	start.Write(r.conn)
 	for {
-		m, err := r.ipc.Read()
-		if err != nil {
+		m := &IPCMessage{}
+		if err := m.Read(r.conn); err != nil {
 			r.log.Errorf("IPC server error %s", err)
 			break
 		}
-		r.log.WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Debug("plugin runner received message")
+		r.log.WithField("messageType", m.Type).WithField("body", string(m.Data)).Debug("plugin runner received message")
 
-		if m.MsgType < 0 {
-			// diagnostical
-			continue
-		}
-		switch string(m.Data) {
+		switch m.Type {
 		case msgSupervisorRefresh:
 			r.lock.Lock()
 			r.refresh(context.Background(), false)
 			r.lock.Unlock()
 		case msgSupervisorUnrecognised:
 			// TODO die here?
-			r.log.WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Warnf("supervisor did not recognise previous command")
+			r.log.WithField("messageType", m.Type).WithField("body", string(m.Data)).Warnf("supervisor did not recognise previous command")
 		case msgSupervisorQuit:
 			r.log.Info("Requesting systray quit")
 			systray.Quit()
 			r.log.Info("Finished quit request")
 		default:
-			r.log.WithField("messageType", m.MsgType).WithField("body", string(m.Data)).Error("Plugin received a message type which it doesn't recognise")
-			r.sendIPC(msgPluginUnrecognised)
+			r.log.WithField("messageType", m.Type).WithField("body", string(m.Data)).Error("Plugin received a message type which it doesn't recognise")
+			r.sendIPC(&IPCMessage{Type: msgPluginUnrecognised})
 		}
 	}
 }
@@ -167,8 +160,8 @@ func (r *pluginRunner) loop() {
 	}
 }
 
-func (r *pluginRunner) sendIPC(s string) {
-	err := r.ipc.Write(msgcodeDefault, []byte(s))
+func (r *pluginRunner) sendIPC(m *IPCMessage) {
+	err := m.Write(r.conn)
 	if err != nil {
 		r.log.Warnf("could not write to server: %s", err)
 	}
@@ -177,7 +170,7 @@ func (r *pluginRunner) sendIPC(s string) {
 const osWindows = "windows"
 
 func (r *pluginRunner) refreshAll(ctx context.Context, initial bool) {
-	r.sendIPC(msgPluginRefreshAll)
+	r.sendIPC(&IPCMessage{Type: msgPluginRefreshAll})
 
 }
 
@@ -190,7 +183,7 @@ func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 	r.log.Debug("refresh items")
 	err := r.refreshItems(ctx)
 	if err != nil {
-		r.sendIPC(msgPluginRefreshError)
+		r.sendIPC(&IPCMessage{Type: msgPluginRefreshError})
 	}
 	r.log.Debug("items refreshed")
 	title := r.plugin.Items.CycleItems[0].DisplayText()

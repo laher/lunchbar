@@ -7,7 +7,6 @@ require (
 	github.com/apex/log v1.9.0
 	github.com/getlantern/systray v1.1.0
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
-	github.com/james-barrow/golang-ipc v0.0.0-20210227130457-95e7cc81f5e2
 	github.com/laher/lunchbox v0.0.0-20211025093238-8ed744b97010
 	github.com/matryer/xbar/pkg/plugins v0.0.0-20210918110050-1410be750e94
 	golang.org/x/image v0.0.0-20210628002857-a66eb6448b8d
@@ -15,7 +14,6 @@ require (
 
 require (
 	code.cloudfoundry.org/bytefmt v0.0.0-20211005130812-5bb3c17173e5 // indirect
-	github.com/Microsoft/go-winio v0.5.1 // indirect
 	github.com/VividCortex/ewma v1.2.0 // indirect
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
 	github.com/getlantern/context v0.0.0-20190109183933-c447772a6520 // indirect
