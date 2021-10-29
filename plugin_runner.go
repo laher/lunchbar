@@ -39,21 +39,23 @@ func runPlugin(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	start := &IPCMessage{Type: msgPluginID, Data: filepath.Base(r.plugin.Command)}
+	if err := start.Write(r.conn); err != nil {
+		return err
+	}
 	go r.Listen()
 	systray.Run(r.init(ctx), r.onExit)
 	return nil
 }
 
 type pluginRunner struct {
-	plugin *plugins.Plugin
-	lock   sync.Mutex
-	//ipc      *ipc.Client
+	plugin   *plugins.Plugin
+	lock     sync.Mutex //  this lock is for refreshing and actions
 	conn     net.Conn
 	mainItem *systray.MenuItem
 	items    []*itemWrap
 	log      *log.Entry
-	//subitems    [][]*itemWrap
-	//subsubitems [][]*itemWrap
 }
 
 func (r *pluginRunner) refreshItems(ctx context.Context) error {
@@ -89,7 +91,6 @@ func newPluginRunner(bin string) (*pluginRunner, error) {
 	if err != nil {
 		return nil, err
 	}
-	//defer conn.Close()
 	r := &pluginRunner{
 		plugin: p,
 		conn:   conn,
@@ -102,8 +103,6 @@ func newPluginRunner(bin string) (*pluginRunner, error) {
 
 func (r *pluginRunner) Listen() {
 	r.log.Infof("listen for messages")
-	start := &IPCMessage{Type: msgPluginID, Data: filepath.Base(r.plugin.Command)}
-	start.Write(r.conn)
 	for {
 		m := &IPCMessage{}
 		if err := m.Read(r.conn); err != nil {

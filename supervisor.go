@@ -21,27 +21,24 @@ const (
 )
 
 type supervisor struct {
-	lock        sync.RWMutex
+	lock        sync.RWMutex // this lock covers use of the connection map and startup
 	listener    net.Listener
 	connections map[string]net.Conn
-	//ipcs        map[string]*ipc.Server
-	log       *log.Entry
-	processes []*exec.Cmd
+	log         *log.Entry
+	processes   []*exec.Cmd
 }
 
 func newSupervisor() *supervisor {
 	s := &supervisor{
 		connections: map[string]net.Conn{},
-		//ipcs:      map[string]*ipc.Server{},
-		log:       log.WithField("t", "supervisor").WithField("pid", os.Getpid()),
-		processes: []*exec.Cmd{},
+		log:         log.WithField("t", "supervisor").WithField("pid", os.Getpid()),
+		processes:   []*exec.Cmd{},
 	}
 	return s
 }
 
 func sockAddr() string {
 	return filepath.Join(os.TempDir(), "lunchbar.sock")
-	//return filepath.Join(os.Getenv("TEMP"), "lunchbar")
 }
 
 func (s *supervisor) listenForConnections() error {
@@ -71,28 +68,58 @@ func (s *supervisor) listenForConnections() error {
 	return nil
 }
 
+func (s *supervisor) putConnection(key string, conn net.Conn) {
+	s.lock.RLock()
+	existing, exists := s.connections[key]
+	if exists {
+		err := existing.Close()
+		s.log.WithField("for-plugin", key).WithError(err).Warn("close existing connection for plugin")
+	}
+	s.lock.RUnlock()
+	s.lock.Lock()
+	s.connections[key] = conn
+	s.lock.Unlock()
+}
+
+func (s *supervisor) connectionKeys() []string {
+	s.lock.RLock()
+	keys := []string{}
+	for k := range s.connections {
+		keys = append(keys, k)
+	}
+	s.lock.RUnlock()
+	return keys
+}
+
+func (s *supervisor) getConnection(key string) (net.Conn, bool) {
+	s.lock.RLock()
+	c, ok := s.connections[key]
+	s.lock.RUnlock()
+	return c, ok
+}
+
 func (s *supervisor) handleConnection(ctx context.Context, conn net.Conn) {
 	key := "" // no key yet
+	l := s.log
 	for {
 		m := &IPCMessage{}
 		err := m.Read(conn)
 		if err != nil {
 			if err == io.EOF {
 				// TODO - restart?
-				log.Infof("client closed connection")
+				l.Infof("client closed connection")
 				return
 			}
-			log.Errorf("error %s", err)
+			l.Errorf("error %s", err)
 			return
 		}
 
-		log.Infof("[READ] message: %+v", m)
+		s.log.WithField("", "").Infof("incoming message: %+v", m)
 		if m.Type == msgPluginID {
 			log.Infof("plugin connected with ID: %s", string(m.Data))
 			key = string(m.Data)
-			s.lock.Lock()
-			s.connections[key] = conn
-			s.lock.Unlock()
+			s.putConnection(key, conn)
+			l = l.WithField("from-plugin", key)
 		} else {
 			/*
 				s := strings.ToUpper(string(m.Data))
@@ -113,7 +140,8 @@ func (s *supervisor) handleConnection(ctx context.Context, conn net.Conn) {
 }
 
 func (s *supervisor) handleMessage(ctx context.Context, key string, m *IPCMessage) {
-	s.log.WithField("from-plugin", key).WithField("messageType", m.Type).WithField("body", string(m.Data)).Debug("supervisor received message")
+	l := s.log.WithField("from-plugin", key).WithField("messageType", m.Type).WithField("body", string(m.Data))
+	l.Debug("supervisor received message")
 	switch m.Type {
 	case msgPluginRefreshAll:
 		// TODO discovering new plugins
@@ -125,9 +153,9 @@ func (s *supervisor) handleMessage(ctx context.Context, key string, m *IPCMessag
 		// TODO - kill and relaunch, maybe? after a time...
 	case msgPluginUnrecognised:
 		// TODO - die here? / kill plugin?
-		s.log.WithField("from-plugin", key).WithField("messageType", m.Type).WithField("body", string(m.Data)).Warn("plugin did not recognise previous command")
+		l.Warn("plugin did not recognise previous command")
 	case msgPluginRestartme:
-		s.log.Info("send quit request to plugin which requested restart")
+		l.Info("send quit request to plugin which requested restart")
 		s.sendIPC(key, &IPCMessage{Type: msgSupervisorQuit})
 		// TODO timing. should we wait for plugins to respond?
 		time.Sleep(time.Second * 1)
@@ -136,34 +164,27 @@ func (s *supervisor) handleMessage(ctx context.Context, key string, m *IPCMessag
 		s.startPlugin(ctx, plugin)
 
 	case msgPluginQuit:
-		s.log.Info("broadcasting quit request to all plugins")
+		l.Info("broadcasting quit request to all plugins")
 		s.broadcast(&IPCMessage{Type: msgSupervisorQuit})
 		// TODO timing. should we wait for plugins to respond?
 		time.Sleep(time.Second * 2)
-		s.log.Info("exiting now")
+		l.Info("exiting now")
 		os.Exit(0)
 	default:
-		s.log.WithField("from-plugin", key).WithField("messageType", m.Type).WithField("body", string(m.Data)).Error("supervisor received a message which is not handled")
+		l.Error("supervisor received a message which is not handled")
 		s.sendIPC(key, &IPCMessage{Type: msgSupervisorUnrecognised})
 	}
 }
 
 func (s *supervisor) broadcast(m *IPCMessage) {
-	s.lock.RLock()
-	keys := []string{}
-	for k := range s.connections {
-		keys = append(keys, k)
-	}
-	s.lock.RUnlock()
+	keys := s.connectionKeys()
 	for _, k := range keys {
 		s.sendIPC(k, m)
 	}
 }
 
 func (s *supervisor) sendIPC(k string, m *IPCMessage) error {
-	s.lock.RLock()
-	c, ok := s.connections[k]
-	s.lock.RUnlock()
+	c, ok := s.getConnection(k)
 	if ok {
 		s.log.Infof("Sending quit message to plugin: %s", k)
 		if err := m.Write(c); err != nil {
@@ -221,9 +242,9 @@ func (s *supervisor) startPlugin(ctx context.Context, plugin *plugins.Plugin) {
 		return
 	}
 	key := filepath.Base(plugin.Command)
-	s.log.Infof("starting plugin %s: %s", key, thisExecutable)
+	s.log.WithField("for-plugin", key).Infof("starting plugin (passing thisExecutable=%s)", thisExecutable)
 	//go s.Listen(ctx, key) // restart ?
-	go func(plugin *plugins.Plugin) {
+	go func() {
 		cmd := exec.CommandContext(ctx, thisExecutable, "plugin", "-plugin", key)
 		plugins.Setpgid(cmd) // sets process group id (Unix only). This ensures that the child processes get tidied up
 		cmd.Dir = pluginsDir()
@@ -232,8 +253,8 @@ func (s *supervisor) startPlugin(ctx context.Context, plugin *plugins.Plugin) {
 		// TODO use Start instead?
 		err := cmd.Run()
 		if err != nil {
-			s.log.WithField("plugin", filepath.Base(plugin.Command)).Errorf("error running %s: %s", thisExecutable, err)
+			s.log.WithField("for-plugin", key).WithError(err).Error("error running plugin")
 			return
 		}
-	}(plugin)
+	}()
 }

@@ -7,6 +7,7 @@ require (
 	github.com/apex/log v1.9.0
 	github.com/getlantern/systray v1.1.0
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
+	github.com/joho/godotenv v1.4.0
 	github.com/laher/lunchbox v0.0.0-20211025093238-8ed744b97010
 	github.com/matryer/xbar/pkg/plugins v0.0.0-20210918110050-1410be750e94
 	golang.org/x/image v0.0.0-20210628002857-a66eb6448b8d
@@ -25,7 +26,6 @@ require (
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/itchyny/gojq v0.12.5 // indirect
 	github.com/itchyny/timefmt-go v0.1.3 // indirect
-	github.com/joho/godotenv v1.4.0 // indirect
 	github.com/leaanthony/go-ansi-parser v1.2.0 // indirect
 	github.com/lestrrat-go/strftime v1.0.5 // indirect
 	github.com/logrusorgru/aurora v2.0.3+incompatible // indirect

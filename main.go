@@ -7,23 +7,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/apex/log"
+	"github.com/joho/godotenv"
 	"github.com/laher/lunchbox/lunch"
 	"github.com/matryer/xbar/pkg/plugins"
 )
-
-func homeDir() string {
-	var homeDir string
-	if runtime.GOOS == osWindows {
-		homeDir = os.Getenv("USERPROFILE")
-	} else {
-		homeDir = os.Getenv("HOME")
-	}
-	return homeDir
-}
 
 // TODO - OS-dependent dir? (xbar uses ~/Library/Application\ Support )
 func rootDir() string {
@@ -59,6 +49,12 @@ func claimAsLunchboxProvider() {
 func main() {
 	claimAsLunchboxProvider()
 	flag.Parse()
+	if err := godotenv.Load(filepath.Join(rootDir(), ".env")); err != nil {
+		log.Errorf("Error loading .env file: %s", err)
+	}
+	if os.Getenv("PATH_EXTRA") != "" {
+		os.Setenv("PATH", os.Getenv("PATH")+":"+os.Getenv("PATH_EXTRA"))
+	}
 
 	subcommand := ""
 	if len(os.Args) > 1 {
