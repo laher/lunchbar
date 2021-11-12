@@ -7,7 +7,6 @@ import (
 )
 
 func TestEmoji(t *testing.T) {
-
 	em := ListEmoji()
 	for _, e := range em {
 		t.Logf("listed: '%s'", e)

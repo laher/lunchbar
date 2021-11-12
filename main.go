@@ -38,7 +38,7 @@ func claimAsLunchboxProvider() {
 		if !strings.Contains(bin, string(os.PathSeparator)) {
 			path, err := exec.LookPath(bin)
 			if err == nil {
-				fmt.Printf("bin is available at %s\n", path)
+				log.Debugf("bin is available at %s", path)
 				bin = path
 			}
 		}

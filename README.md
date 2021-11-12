@@ -2,11 +2,14 @@
 
 **VERY EARLY POC - NOT READY YET**
 
-Lunchbar is an [xbar](https://github.com/matryer/xbar) clone which is targeted for cross-platform use on Mac, Linux and Windows.
+Lunchbar is an [xbar](https://github.com/matryer/xbar) clone with some goals:
 
-The main point of this project is to be able to easily share plugins and tools between team-mates, even if they're not using the same Operating System.
+ * Cross-platform: Mac, Linux and Windows.
+ * Focused on sharing plugins: easy to install and maintain plugins across a team
 
-Lunchbar uses [lunchbox](https://github.com/laher/lunchbox) to provide batteries-included support for cross-platform plugins
+The main point of this project is to be able to easily share plugins and tools between team-mates, even if they're not using the same Operating System, and even if they haven't got the same stuff installed.
+
+Lunchbar includes its sibling project, [lunchbox](https://github.com/laher/lunchbox), to provide batteries-included support for cross-platform plugins.
 
 ## Comparison
 
@@ -17,23 +20,29 @@ What are the similarities and differences between xbar and lunchbar?
 ### Commonality
 
  * they're both written in go.
- * The plugin design and format is the same. I plan to add some metadata tags, but that's all (for now). Anything beyond that I'll try to upstream to xbar.
-   * lunchbar depends on xbar packages, including the emoji support. So, the look and feel is very similar. On Mac at least.
+ * The plugin design and format is the same.
+   * I plan to add some metadata tags, but that's all (I think).
+   * Anything beyond that, I'll try to upstream to xbar. One PR so far.
+ * lunchbar depends on xbar's `pkg/plugin` package, including the emoji support.
+   * So, the look and feel is very similar. On Mac at least.
 
-### Key differences from xbar
+### Some differences from xbar
 
  * Cross-platform from the outset.
     * Use [getlantern/systray](https://github.com/getlantern/systray) instead of wails.
       * xbar's UI library, Wails, doesn't currently support Windows or Linux. It could take a while before it gets implemented, and even then there are some challenges....
     * There are peculiar challenges when developing a cross-platform system tray.
-      * OS differences - e.g. Windows doesn't show text.
+      * OS differences - e.g. Windows doesn't show text. Workarounds for using/generating icons.
     * Each plugin runs in its own process (this is forced by a limitation of systray). IPC communications between main app and plugin app.
-    * Hope to write some support for building cross-platform plugins easily. e.g. a bundled `elvish` interpreter
  * Reduced feature set.
    * No plugin browser or other UI (for the time being)
    * Some features are hard to implement in a cross-platform way.
      * icons only for some platforms. The first item shows what would normally be in the list.
      * IPC - lunchbar uses getlantern/systray instead of wails. This is already cross-platform, but it's different... only one systray icon per process. So, this tool launches one process per icon.
+ * Easier sharing amongst teams:
+  * Bundled interpreter(s) for easy installation of cross-platform plugins. `elvish` first.
+  * TODO: set up 'alternate repositories'
+  * TODO: support per-plugin ENV variables via dotenv files.
  * Little differences:
    * The 'lunchbar menu' is at the top
 
@@ -43,7 +52,6 @@ What are the similarities and differences between xbar and lunchbar?
  * OS tagging for plugins.
  * Some mechanism to discover and install plugins. Possibly similar to the xbar wasy. Not sure.
  * Some form of automated ENV management (<plugin>.env files) with some encryption support.
-
 
 ## Installation
 
@@ -106,8 +114,8 @@ M2 is to add some convenience features ahead of plugin management
  - [ ] .env files
      - [ ] encrypted keys
  - [ ] Plugin-writing help
-   - [ ] Bundled-elvish support
-   - [ ] Cross-platform convenience methods
+   - [x] Bundled-elvish support
+   - [x] Cross-platform convenience methods
    - [ ] Guides
 
 ### M3

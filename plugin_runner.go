@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -17,6 +19,7 @@ import (
 	"github.com/getlantern/systray"
 	"github.com/laher/lunchbox/lunch"
 	"github.com/matryer/xbar/pkg/plugins"
+	"golang.org/x/exp/utf8string"
 )
 
 func runPlugin(ctx context.Context, args []string) error {
@@ -80,7 +83,7 @@ func (r *pluginRunner) refreshItems(ctx context.Context) error {
 		r.plugin.Refresh(ctx)
 	}
 	// TODO do we need this ever?
-	//r.sendIPC(&IPCMessage{Type: msgPluginRestartme})
+	// r.sendIPC(&IPCMessage{Type: msgPluginRestartme})
 	return nil
 }
 
@@ -103,13 +106,23 @@ func newPluginRunner(bin string) (*pluginRunner, error) {
 
 func (r *pluginRunner) Listen() {
 	r.log.Infof("listen for messages")
-	for {
+	decoder := json.NewDecoder(r.conn)
+	for decoder.More() {
 		m := &IPCMessage{}
+		if err := decoder.Decode(m); err != nil {
+			if err == io.EOF {
+				// TODO - restart?
+				r.log.Infof("client closed connection")
+				return
+			}
+			r.log.WithError(err).Errorf("error receiving IPC message")
+			return
+		}
 		if err := m.Read(r.conn); err != nil {
 			r.log.Errorf("IPC server error %s", err)
 			break
 		}
-		r.log.WithField("messageType", m.Type).WithField("body", string(m.Data)).Debug("plugin runner received message")
+		r.log.WithField("messageType", m.Type).WithField("body", m.Data).Debug("plugin runner received message")
 
 		switch m.Type {
 		case msgSupervisorRefresh:
@@ -118,13 +131,14 @@ func (r *pluginRunner) Listen() {
 			r.lock.Unlock()
 		case msgSupervisorUnrecognised:
 			// TODO die here?
-			r.log.WithField("messageType", m.Type).WithField("body", string(m.Data)).Warnf("supervisor did not recognise previous command")
+			r.log.WithField("messageType", m.Type).WithField("body", m.Data).Warnf("supervisor did not recognise previous command")
 		case msgSupervisorQuit:
 			r.log.Info("Requesting systray quit")
 			systray.Quit()
 			r.log.Info("Finished quit request")
 		default:
-			r.log.WithField("messageType", m.Type).WithField("body", string(m.Data)).Error("Plugin received a message type which it doesn't recognise")
+			r.log.WithField("messageType", m.Type).
+				WithField("body", m.Data).Error("Plugin received a message type which it doesn't recognise")
 			r.sendIPC(&IPCMessage{Type: msgPluginUnrecognised})
 		}
 	}
@@ -141,6 +155,7 @@ func (r *pluginRunner) init(ctx context.Context) func() {
 			time.Sleep(5 * time.Second)
 			r.loop()
 		}()
+		r.log.Infof("initialisation complete for: %s", r.plugin.Command)
 	}
 }
 
@@ -167,11 +182,8 @@ func (r *pluginRunner) sendIPC(m *IPCMessage) {
 	}
 }
 
-const osWindows = "windows"
-
-func (r *pluginRunner) refreshAll(ctx context.Context, initial bool) {
+func (r *pluginRunner) refreshAll(_ context.Context) {
 	r.sendIPC(&IPCMessage{Type: msgPluginRefreshAll})
-
 }
 
 // TODO allow icon configuration (via dotenv?)
@@ -187,25 +199,27 @@ func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 	}
 	r.log.Debug("items refreshed")
 	title := r.plugin.Items.CycleItems[0].DisplayText()
+	uTitle := utf8string.NewString(title)
+	if uTitle.RuneCount() > 20 { // systray seems to hang with long title
+		title = uTitle.Slice(0, 19)
+	}
+	firstChar := uTitle.Slice(0, 1)
+	r.log.Infof("title: %s", title)
 	systray.SetTooltip(title) // not all platforms
 
-	lunchbarTitle := "Lunchbar"
+	lunchbarTitle := "Lunchbar menu"
 	if r.iconOnly() {
 		// necessary for windows - set icon ...
 		// it's a bit ugly right now so just leave it for other platforms for now ...
 		r.log.Infof("found %d names\n", len(getNames()))
-		lowered := strings.ToLower(strings.TrimSpace(title))
-		firstChar := string([]rune(lowered)[0])
-		b, err := GetIconForChar(firstChar)
-		if err != nil {
-			r.log.Warnf("couldnt find image for '%s': %v", firstChar, err)
+		if b, err := GetIconForChar(strings.ToLower(firstChar)); err != nil {
+			r.log.Warnf("couldnt find image for '%s': %v", strings.ToLower(firstChar), err)
 			// oops
 		} else {
 			ic, err := getEmojicon(b)
 			if err != nil {
-
 				r.log.Warnf("couldnt load emojicon: %v", err)
-				ic, err = getTextIcon(firstChar)
+				ic, err = getTextIcon(strings.ToLower(firstChar))
 				if err != nil {
 					r.log.Warnf("couldnt load text icon: %v", err)
 				}
@@ -243,7 +257,7 @@ func (r *pluginRunner) refresh(ctx context.Context, initial bool) {
 
 func (r *pluginRunner) loadItem(index int, item *plugins.Item) {
 	var itemW *itemWrap
-	var title = ""
+	var title string
 	if item.Params.Separator {
 		title = "----------"
 	} else {

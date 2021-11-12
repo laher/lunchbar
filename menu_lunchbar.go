@@ -27,7 +27,6 @@ func (r *pluginRunner) LunchbarMenu(title string) {
 }
 
 func (r *pluginRunner) menuManageLunchbar() {
-
 	mManageLunchbar := r.mainItem.AddSubMenuItem("Manage lunchbar", "manage lunchbar itself")
 	mOpen := mManageLunchbar.AddSubMenuItem("Edit .env file", "edit config file")
 	go func() {

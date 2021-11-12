@@ -69,7 +69,6 @@ func GetIconForChar(ch string) ([]byte, error) {
 		for k := range getNames() {
 			fmt.Println(k)
 		}
-		//fmt.Printf("found %d names\n", len(getNames()))
 		return nil, errors.New("emoji not found")
 	}
 	return GetEmoji(icon)

@@ -13,6 +13,12 @@ import (
 	"github.com/matryer/xbar/pkg/plugins"
 )
 
+const (
+	osWindows = "windows"
+	osLinux   = "linux"
+	osDarwin  = "darwin"
+)
+
 func homeDir() string {
 	var homeDir string
 	if runtime.GOOS == osWindows {
@@ -29,15 +35,14 @@ func osEditFile(filename string) error {
 	editor := os.Getenv("LUNCHBAR_EDITOR")
 	if editor == "" {
 		log.Warn("LUNCHBAR_EDITOR not set ...")
-		//editor = os.Getenv("VISUAL")
 	}
 
 	ctx := context.Background()
 	if editor == "" {
 		// open in the default way
 		switch runtime.GOOS {
-		case "darwin":
-			//open -a TextEdit file.txt
+		case osDarwin:
+			// equivalent to 'open -a TextEdit file.txt'
 			cmd := exec.CommandContext(ctx, "open", "-a", "TextEdit", filename)
 			plugins.Setpgid(cmd)
 			if err := cmd.Run(); err != nil {
@@ -46,8 +51,9 @@ func osEditFile(filename string) error {
 			}
 			log.Info("opened with TextEdit")
 			return nil
-		case "linux":
-			//mimeCmd := exec.CommandContext(ctx, "xdg-mime", "query", "text/plain")
+		case osLinux:
+			// assume update-alternatives and gnome-text-editor (this should cover most Debian/Ubuntu and RedHat/Fedora flavours)
+			// TODO other linux variants?
 			mimeCmd := exec.CommandContext(ctx, "update-alternatives", "--list", "gnome-text-editor")
 			buf := bytes.Buffer{}
 			mimeCmd.Stdout = &buf
@@ -57,13 +63,13 @@ func osEditFile(filename string) error {
 			}
 			editors := strings.TrimSpace(buf.String())
 			editorArr := strings.Split(editors, "\n")
-			cmd := exec.CommandContext(ctx, editorArr[0], filename)
+			cmd := exec.CommandContext(ctx, editorArr[0], filename) //nolint:gosec
 			plugins.Setpgid(cmd)
 			if err := cmd.Run(); err != nil {
 				return err
 			}
 			return nil
-		case "windows":
+		case osWindows:
 			// TODO ... notepad seems bad. Try Code/notepad++/?
 			cmd := exec.CommandContext(ctx, "notepad.exe", filename)
 			plugins.Setpgid(cmd)
@@ -92,11 +98,11 @@ func osOpen(ctx context.Context, href string) error {
 	var err error
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
-	case "linux":
+	case osLinux:
 		cmd = exec.CommandContext(ctx, "xdg-open", href)
-	case "windows":
+	case osWindows:
 		cmd = exec.CommandContext(ctx, "rundll32", "url.dll,FileProtocolHandler", href)
-	case "darwin":
+	case osDarwin:
 		cmd = exec.CommandContext(ctx, "open", href)
 	default:
 		return errUnsupportedPlatform

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net"
 	"os"
@@ -14,10 +15,6 @@ import (
 	"github.com/apex/log"
 
 	"github.com/matryer/xbar/pkg/plugins"
-)
-
-const (
-	msgcodeDefault = 1
 )
 
 type supervisor struct {
@@ -101,46 +98,33 @@ func (s *supervisor) getConnection(key string) (net.Conn, bool) {
 func (s *supervisor) handleConnection(ctx context.Context, conn net.Conn) {
 	key := "" // no key yet
 	l := s.log
-	for {
+	decoder := json.NewDecoder(conn)
+	for decoder.More() {
 		m := &IPCMessage{}
-		err := m.Read(conn)
-		if err != nil {
+		if err := decoder.Decode(m); err != nil {
 			if err == io.EOF {
 				// TODO - restart?
 				l.Infof("client closed connection")
 				return
 			}
-			l.Errorf("error %s", err)
+			l.WithError(err).Errorf("error receiving IPC message")
 			return
 		}
 
 		s.log.WithField("", "").Infof("incoming message: %+v", m)
 		if m.Type == msgPluginID {
-			log.Infof("plugin connected with ID: %s", string(m.Data))
-			key = string(m.Data)
+			log.Infof("plugin connected with ID: %s", m.Data)
+			key = m.Data
 			s.putConnection(key, conn)
 			l = l.WithField("from-plugin", key)
 		} else {
-			/*
-				s := strings.ToUpper(string(m.Data))
-				m.Length = len(s)
-				m.Data = []byte(s)
-
-				err = m.Write(conn)
-				if err != nil {
-					log.Errorf("Error writing %s", err)
-					break
-				}
-
-				fmt.Println("[WRITE] ", m)
-			*/
 			s.handleMessage(ctx, key, m)
 		}
 	}
 }
 
 func (s *supervisor) handleMessage(ctx context.Context, key string, m *IPCMessage) {
-	l := s.log.WithField("from-plugin", key).WithField("messageType", m.Type).WithField("body", string(m.Data))
+	l := s.log.WithField("from-plugin", key).WithField("messageType", m.Type).WithField("body", m.Data)
 	l.Debug("supervisor received message")
 	switch m.Type {
 	case msgPluginRefreshAll:
@@ -156,7 +140,9 @@ func (s *supervisor) handleMessage(ctx context.Context, key string, m *IPCMessag
 		l.Warn("plugin did not recognise previous command")
 	case msgPluginRestartme:
 		l.Info("send quit request to plugin which requested restart")
-		s.sendIPC(key, &IPCMessage{Type: msgSupervisorQuit})
+		if err := s.sendIPC(key, &IPCMessage{Type: msgSupervisorQuit}); err != nil {
+			l.WithError(err).Warn("could not send quit request. Possibly already dead")
+		}
 		// TODO timing. should we wait for plugins to respond?
 		time.Sleep(time.Second * 1)
 		p := filepath.Join(pluginsDir(), key)
@@ -172,14 +158,18 @@ func (s *supervisor) handleMessage(ctx context.Context, key string, m *IPCMessag
 		os.Exit(0)
 	default:
 		l.Error("supervisor received a message which is not handled")
-		s.sendIPC(key, &IPCMessage{Type: msgSupervisorUnrecognised})
+		if err := s.sendIPC(key, &IPCMessage{Type: msgSupervisorUnrecognised}); err != nil {
+			l.WithError(err).Warn("could not send 'unrecognised command' request")
+		}
 	}
 }
 
 func (s *supervisor) broadcast(m *IPCMessage) {
 	keys := s.connectionKeys()
 	for _, k := range keys {
-		s.sendIPC(k, m)
+		if err := s.sendIPC(k, m); err != nil {
+			s.log.WithError(err).Warnf("Sending broadcast message to plugin: %s", k)
+		}
 	}
 }
 
@@ -243,7 +233,6 @@ func (s *supervisor) startPlugin(ctx context.Context, plugin *plugins.Plugin) {
 	}
 	key := filepath.Base(plugin.Command)
 	s.log.WithField("for-plugin", key).Infof("starting plugin (passing thisExecutable=%s)", thisExecutable)
-	//go s.Listen(ctx, key) // restart ?
 	go func() {
 		cmd := exec.CommandContext(ctx, thisExecutable, "plugin", "-plugin", key)
 		plugins.Setpgid(cmd) // sets process group id (Unix only). This ensures that the child processes get tidied up

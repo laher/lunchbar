@@ -26,7 +26,6 @@ func (item *itemWrap) DoAction(ctx context.Context) {
 		if item.action != nil {
 			item.action(ctx)
 		} else if item.plugItem != nil && len(item.plugItem.Items) < 1 {
-
 			action := item.plugItem.Action()
 			if action != nil {
 				log.Debug("run item action")

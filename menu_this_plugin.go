@@ -3,7 +3,6 @@ package main
 import "context"
 
 func (r *pluginRunner) menuThisPlugin() {
-
 	mThisPlugin := r.mainItem.AddSubMenuItem("This plugin", "manage this plugin")
 	mRefresh := mThisPlugin.AddSubMenuItem("Refresh", "Refresh script")
 	go func() {
@@ -41,5 +40,4 @@ func (r *pluginRunner) menuThisPlugin() {
 			r.log.Info("Finished restart request")
 		}
 	}()
-
 }
