@@ -79,6 +79,8 @@ github.com/kr/logfmt v0.0.0-20140226030751-b84e30acd515/go.mod h1:+0opPa2QZZtGFB
 github.com/kr/pretty v0.2.0/go.mod h1:ipq/a2n7PKx3OHsz4KJII5eveXtPO4qwEXGdVfWzfnI=
 github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
 github.com/kr/text v0.1.0/go.mod h1:4Jbv+DJW3UT/LiOwJeYQe1efqtUx/iVham/4vfdArNI=
+github.com/laher/lunchbox v0.0.0-20211025093238-8ed744b97010 h1:+7n4QUfvRMGQ4varmNBfkEavo+3PMvWbXfvRbpGXXMM=
+github.com/laher/lunchbox v0.0.0-20211025093238-8ed744b97010/go.mod h1:vgRVmntuWSK4+rplNR0OfniaSPbTrjkxorDkmKoLOSc=
 github.com/laher/xbar/pkg/metadata v0.0.0-20210927175547-f69614fb2e13 h1:PWPcIAcecxFnxozdWy9jgUQBcdSVLfIOKYgR0xT38L0=
 github.com/laher/xbar/pkg/metadata v0.0.0-20210927175547-f69614fb2e13/go.mod h1:NuDF9TSMp+RpGb/HMyNf7DgJbTWYc04nW63PP2HpJfA=
 github.com/laher/xbar/pkg/plugins v0.0.0-20210927175547-f69614fb2e13 h1:XVvXf3CJFLVuqf5V6dD8/wa0MCQOzn82kYAO5KPKkwk=

@@ -10,6 +10,7 @@ require (
 	github.com/joho/godotenv v1.4.0
 	github.com/laher/lunchbox v0.0.0-20211025093238-8ed744b97010
 	github.com/matryer/xbar/pkg/plugins v0.0.0-20210918110050-1410be750e94
+	golang.org/x/exp v0.0.0-20211105205138-14c72366447f
 	golang.org/x/image v0.0.0-20210628002857-a66eb6448b8d
 )
 
@@ -41,7 +42,7 @@ require (
 	github.com/vbauerster/mpb/v5 v5.4.0 // indirect
 	go.etcd.io/bbolt v1.3.6 // indirect
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
-	golang.org/x/sys v0.0.0-20211015200801-69063c4bb744 // indirect
+	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654 // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	src.elv.sh v0.16.3 // indirect
 )
