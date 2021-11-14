@@ -8,7 +8,7 @@ require (
 	github.com/getlantern/systray v1.1.0
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 	github.com/joho/godotenv v1.4.0
-	github.com/laher/lunchbox v0.0.0-20211025093238-8ed744b97010
+	github.com/laher/lunchbox v0.0.0-20211112085600-b8d31d5220a8
 	github.com/matryer/xbar/pkg/plugins v0.0.0-20210918110050-1410be750e94
 	golang.org/x/exp v0.0.0-20211105205138-14c72366447f
 	golang.org/x/image v0.0.0-20210628002857-a66eb6448b8d
