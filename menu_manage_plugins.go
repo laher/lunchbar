@@ -84,6 +84,7 @@ func (r *pluginRunner) installPlugin(ctx context.Context, pi string) error {
 	if err != nil {
 		return err
 	}
+	defer rdr.Close()
 	dest := filepath.Join(pluginsDir(), filepath.Base(pi))
 	w, err := os.Create(dest)
 	if err != nil {
@@ -93,6 +94,7 @@ func (r *pluginRunner) installPlugin(ctx context.Context, pi string) error {
 		w.Close()
 		return err
 	}
+	w.Close()
 	if err := w.Close(); err != nil {
 		return err
 	}

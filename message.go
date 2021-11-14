@@ -46,24 +46,5 @@ func (e *IPCMessage) Read(c net.Conn) error {
 			return err
 		}
 	}
-	/*
-		buf := make([]byte, 4)
-		if _, err := c.Read(buf); err != nil {
-			return err
-		}
-		byteCount := binary.BigEndian.Uint32(buf)
-
-		buf = make([]byte, 4)
-		if _, err := c.Read(buf); err != nil {
-			return err
-		}
-		e.Type = string(buf)
-
-
-		if _, err := c.Read(data); err != nil {
-			return err
-		}
-		e.Data = string(data)
-	*/
 	return nil
 }
